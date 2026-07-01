@@ -29,7 +29,7 @@ export const config = {
   banner: {
     activo: true,
     imagen:
-      'https://s3.duellinksmeta.com/mdm_img/ygo-meta/sets/CORI_OCG_Banner.webp',
+      'https://i.imgur.com/nwBj2Z4.jpeg',
     alt: 'Nueva preventa',
   },
 

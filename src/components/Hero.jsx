@@ -6,7 +6,7 @@ export default function Hero() {
   const [logoOk, setLogoOk] = useState(true)
 
   return (
-    <section className="relative overflow-hidden rounded-2xl border border-[var(--color-border)] bg-gradient-to-br from-[var(--hero-from)] to-[var(--hero-to)] px-6 py-7 text-white shadow-lg shadow-blue-900/30">
+    <section className="relative overflow-hidden rounded-2xl border border-[var(--color-border)] bg-gradient-to-br from-[var(--hero-from)] to-[var(--hero-to)] px-6 py-5 text-white shadow-lg shadow-blue-900/30">
       {/* Logo Yu-Gi-Oh! de fondo, tenue */}
       {logoOk && (
         <img
@@ -19,10 +19,10 @@ export default function Hero() {
       )}
 
       <div className="relative z-10 max-w-lg">
-        <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
+        <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
           Bienvenido a {config.storeName}
         </h1>
-        <p className="mt-2 text-sm text-blue-100">
+        <p className="mt-1.5 text-sm text-blue-100">
           Singles, productos sellados, accesorios y preventas. Armá tu pedido
           y lo coordinamos por WhatsApp.
         </p>
@@ -35,7 +35,7 @@ export default function Hero() {
           alt=""
           aria-hidden="true"
           onError={() => setYugiOk(false)}
-          className="pointer-events-none absolute -bottom-4 right-4 hidden h-48 drop-shadow-2xl sm:block"
+          className="pointer-events-none absolute -bottom-4 right-4 hidden h-40 drop-shadow-2xl sm:block"
         />
       )}
     </section>
