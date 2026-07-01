@@ -61,7 +61,7 @@ export default function Catalog({ filter, setFilter }) {
 
   return (
     <div className="space-y-5">
-      <Hero onVerPreventa={() => setFilter({ ...BASE, preventa: true })} />
+      <Hero />
 
       {/* Consulta por cartas a pedido */}
       <ConsultaCarta />

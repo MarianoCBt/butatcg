@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { StoreProvider, useStore } from './store/StoreContext'
 import Header from './components/Header'
+import Banner from './components/Banner'
 import Catalog from './views/Catalog'
 import Cart from './views/Cart'
 
@@ -50,6 +51,7 @@ function Shell() {
         applyFilter={applyFilter}
         onInicio={irAInicio}
       />
+      <Banner />
       <main className="mx-auto max-w-7xl px-4 py-6">
         {view === 'catalogo' && <Catalog filter={filter} setFilter={setFilter} />}
         {view === 'carrito' && <Cart onSeguirComprando={irAInicio} />}

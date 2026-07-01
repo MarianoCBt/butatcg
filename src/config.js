@@ -21,6 +21,19 @@ export const config = {
   torneosUrl: 'https://l4gash.github.io/buta-tcg-web/index.html',
 
   // -------------------------------------------------------------------
+  //  BANNER decorativo (imagen, arriba de todo). Cambiá la imagen cuando
+  //  salga una preventa nueva. Poné activo: false para ocultarlo.
+  //  - imagen: URL de la imagen, o '/archivo.webp' si la subís a public/.
+  //  Alto del banner: ~96px (celular) / ~128px (tablet) / ~160px (escritorio).
+  // -------------------------------------------------------------------
+  banner: {
+    activo: true,
+    imagen:
+      'https://s3.duellinksmeta.com/mdm_img/ygo-meta/sets/CORI_OCG_Banner.webp',
+    alt: 'Nueva preventa',
+  },
+
+  // -------------------------------------------------------------------
   //  FUENTE DE STOCK (Google Sheets publicado como CSV)
   //  Cómo obtener este link:
   //   1) Abrí tu planilla en Google Sheets.

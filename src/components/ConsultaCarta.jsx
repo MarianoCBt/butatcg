@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { config } from '../config'
 
-// Caja para consultar por cartas que no están publicadas (se manda por WhatsApp).
+// Caja desplegable para consultar por cartas que no están publicadas.
+// Cerrada ocupa una sola línea; se expande al tocarla.
 export default function ConsultaCarta() {
+  const [open, setOpen] = useState(false)
   const [texto, setTexto] = useState('')
   const vacio = !texto.trim()
 
@@ -21,35 +23,49 @@ export default function ConsultaCarta() {
   }
 
   return (
-    <div className="rounded-2xl border border-[var(--color-brand)]/40 bg-gradient-to-br from-[var(--color-surface)] to-[var(--color-brand-light)]/40 p-5">
-      <div className="flex items-start gap-3">
-        <span className="text-2xl">🔎</span>
-        <div className="min-w-0 flex-1">
-          <h3 className="text-base font-semibold text-[var(--color-ink)]">
-            ¿Buscás otra carta que no está publicada?
-          </h3>
-          <p className="mt-0.5 text-sm text-[var(--color-muted)]">
-            Decinos el nombre y te confirmamos si la podemos conseguir a pedido.
-          </p>
-          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-            <input
-              type="text"
-              value={texto}
-              onChange={(e) => setTexto(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && consultar()}
-              placeholder="Ej: Dark Magician (Ultra Rare) — LOB-EN005"
-              className="w-full flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm outline-none focus:border-[var(--color-brand)]"
-            />
-            <button
-              onClick={consultar}
-              disabled={vacio}
-              className="shrink-0 rounded-lg bg-[var(--color-brand)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[var(--color-brand-dark)] disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Consultar
-            </button>
-          </div>
+    <div className="overflow-hidden rounded-xl border border-[var(--color-brand)]/30 bg-[var(--color-surface)]">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2 px-4 py-2.5 text-left transition hover:bg-[var(--color-brand-light)]/40"
+      >
+        <span className="text-base">🔎</span>
+        <span className="flex-1 text-sm text-[var(--color-ink)]">
+          <span className="font-semibold">¿Buscás otra carta?</span>{' '}
+          <span className="text-[var(--color-muted)]">
+            Consultanos si la conseguimos a pedido.
+          </span>
+        </span>
+        <span
+          className={
+            'text-xs text-[var(--color-muted)] transition-transform ' +
+            (open ? 'rotate-180' : '')
+          }
+        >
+          ▼
+        </span>
+      </button>
+
+      {open && (
+        <div className="flex flex-col gap-2 px-4 pb-4 sm:flex-row">
+          <input
+            type="text"
+            value={texto}
+            onChange={(e) => setTexto(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && consultar()}
+            placeholder="Ej: Dark Magician (Ultra Rare) — LOB-EN005"
+            autoFocus
+            className="w-full flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm outline-none focus:border-[var(--color-brand)]"
+          />
+          <button
+            onClick={consultar}
+            disabled={vacio}
+            className="shrink-0 rounded-lg bg-[var(--color-brand)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[var(--color-brand-dark)] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Consultar
+          </button>
         </div>
-      </div>
+      )}
     </div>
   )
 }
