@@ -20,6 +20,10 @@ export const config = {
   // Link externo a la sección de Torneos
   torneosUrl: 'https://l4gash.github.io/buta-tcg-web/index.html',
 
+  // Instagram de la tienda
+  instagramUrl: 'https://www.instagram.com/butatcg/',
+  instagramUser: '@butatcg',
+
   // -------------------------------------------------------------------
   //  BANNER decorativo (imagen, arriba de todo). Cambiá la imagen cuando
   //  salga una preventa nueva. Poné activo: false para ocultarlo.
