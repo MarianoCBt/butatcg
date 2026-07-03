@@ -133,25 +133,36 @@ export default function Catalog({ filter, setFilter }) {
         </div>
       </div>
 
-      {/* Chip de filtro activo */}
-      {activeLabel && (
-        <div className="flex items-center gap-2 text-sm">
-          <span className="inline-flex items-center gap-2 rounded-full bg-[var(--color-brand-light)] px-3 py-1 font-medium text-[var(--color-brand)]">
-            {activeLabel}
-            <button
-              onClick={() => setFilter(BASE)}
-              className="text-[var(--color-brand)]/70 hover:text-[var(--color-brand)]"
-              title="Quitar filtro"
-            >
-              ✕
-            </button>
-          </span>
+      {/* Chip de filtro activo + contador de resultados */}
+      <div className="flex items-center justify-between gap-2 text-sm">
+        <div>
+          {activeLabel && (
+            <span className="inline-flex items-center gap-2 rounded-full bg-[var(--color-brand-light)] px-3 py-1 font-medium text-[var(--color-brand)]">
+              {activeLabel}
+              <button
+                onClick={() => setFilter(BASE)}
+                className="text-[var(--color-brand)]/70 hover:text-[var(--color-brand)]"
+                title="Quitar filtro"
+              >
+                ✕
+              </button>
+            </span>
+          )}
         </div>
-      )}
+        {!loading && filtered.length > 0 && (
+          <span className="shrink-0 text-xs text-[var(--color-faint)]">
+            {filtered.length} {filtered.length === 1 ? 'producto' : 'productos'}
+          </span>
+        )}
+      </div>
 
       {/* Grilla / estados */}
       {loading && products.length === 0 ? (
-        <p className="py-16 text-center text-[var(--color-faint)]">Cargando stock…</p>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+          {Array.from({ length: 10 }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
       ) : showEmpty ? (
         <p className="py-16 text-center text-[var(--color-faint)]">
           No se encontraron productos.
@@ -176,6 +187,23 @@ function describeFilter(f) {
   if (f.preventa) return 'Preventa'
   if (f.subtipo) return `Accesorios · ${f.subtipo}`
   return null
+}
+
+// Tarjeta "fantasma" mientras carga el stock (animación solo de opacidad)
+function SkeletonCard() {
+  return (
+    <div className="overflow-hidden rounded-b-xl border border-[var(--color-border)] bg-[var(--color-surface)]">
+      <div className="aspect-[3/4] animate-pulse bg-[var(--color-surface-2)]" />
+      <div className="space-y-2 p-3">
+        <div className="h-3 w-3/4 animate-pulse rounded bg-[var(--color-surface-2)]" />
+        <div className="h-3 w-1/2 animate-pulse rounded bg-[var(--color-surface-2)]" />
+        <div className="flex items-end justify-between pt-1">
+          <div className="h-5 w-16 animate-pulse rounded bg-[var(--color-surface-2)]" />
+          <div className="h-7 w-20 animate-pulse rounded-lg bg-[var(--color-surface-2)]" />
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function CatButton({ active, children, onClick }) {

@@ -32,6 +32,13 @@ body,
   height: 100%;
 }
 
+/* Foco visible al navegar con teclado */
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 body {
   margin: 0;
   background-color: var(--color-bg);

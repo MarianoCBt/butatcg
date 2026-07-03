@@ -88,10 +88,18 @@ async function fetchSheet(csvUrl, prefix) {
 }
 
 // Descarga una o varias hojas y devuelve todos los productos juntos.
+// Si UNA hoja falla, seguimos con las demás (solo falla todo si fallan todas).
 export async function fetchStock(csvUrls) {
   const urls = (Array.isArray(csvUrls) ? csvUrls : [csvUrls]).filter(Boolean)
-  const hojas = await Promise.all(
+  const resultados = await Promise.allSettled(
     urls.map((url, i) => fetchSheet(url, 'h' + i)),
   )
-  return hojas.flat()
+  const ok = resultados.filter((r) => r.status === 'fulfilled')
+  if (ok.length === 0 && resultados.length > 0) throw resultados[0].reason
+  resultados
+    .filter((r) => r.status === 'rejected')
+    .forEach((r) =>
+      console.warn('Hoja de stock no disponible:', r.reason?.message),
+    )
+  return ok.flatMap((r) => r.value)
 }

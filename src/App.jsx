@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { StoreProvider, useStore } from './store/StoreContext'
 import Header from './components/Header'
 import Banner from './components/Banner'
+import Footer from './components/Footer'
 import Catalog from './views/Catalog'
 import Cart from './views/Cart'
 
@@ -29,6 +30,11 @@ function Shell() {
     }
   }, [ultimaPreventa])
 
+  // Al cambiar de vista, volver arriba (si no, el carrito abre "scrolleado").
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [view])
+
   function irAInicio() {
     setFilter(
       ultimaPreventa
@@ -44,7 +50,7 @@ function Shell() {
   }
 
   return (
-    <div className="min-h-full">
+    <div className="flex min-h-full flex-col">
       <Header
         view={view}
         setView={setView}
@@ -52,10 +58,11 @@ function Shell() {
         onInicio={irAInicio}
       />
       {view === 'catalogo' && <Banner onClick={irAInicio} />}
-      <main className="mx-auto max-w-7xl px-4 pb-6 pt-3">
+      <main className="mx-auto w-full max-w-7xl flex-1 px-4 pb-6 pt-3">
         {view === 'catalogo' && <Catalog filter={filter} setFilter={setFilter} />}
         {view === 'carrito' && <Cart onSeguirComprando={irAInicio} />}
       </main>
+      <Footer />
     </div>
   )
 }
