@@ -20,7 +20,7 @@ export default function Banner({ onClick }) {
           src={b.imagen}
           alt={b.alt || ''}
           onError={() => setError(true)}
-          className="h-36 w-full object-cover object-center sm:h-52 md:h-64"
+          className="h-24 w-full object-cover object-center sm:h-32 md:h-40"
         />
       </button>
     </div>
