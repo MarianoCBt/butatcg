@@ -10,7 +10,7 @@ export default function Banner({ onClick }) {
   if (!b || !b.activo || !b.imagen || error) return null
 
   return (
-    <div className="mx-auto max-w-7xl px-4 pt-4 sm:px-5">
+    <div className="mx-auto w-full max-w-7xl px-4 pt-4 sm:px-5">
       <button
         onClick={onClick}
         aria-label={b.alt || 'Ver preventa'}
@@ -20,7 +20,7 @@ export default function Banner({ onClick }) {
           src={b.imagen}
           alt={b.alt || ''}
           onError={() => setError(true)}
-          className="h-24 w-full object-cover object-center sm:h-32 md:h-40"
+          className="h-36 w-full object-cover object-center sm:h-52 md:h-64"
         />
       </button>
     </div>
