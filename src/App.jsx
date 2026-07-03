@@ -51,7 +51,7 @@ function Shell() {
         applyFilter={applyFilter}
         onInicio={irAInicio}
       />
-      <Banner onClick={irAInicio} />
+      {view === 'catalogo' && <Banner onClick={irAInicio} />}
       <main className="mx-auto max-w-7xl px-4 pb-6 pt-3">
         {view === 'catalogo' && <Catalog filter={filter} setFilter={setFilter} />}
         {view === 'carrito' && <Cart onSeguirComprando={irAInicio} />}

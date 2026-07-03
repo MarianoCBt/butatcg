@@ -25,8 +25,15 @@ function load(key, fallback) {
   }
 }
 
+// Acepta la config nueva (lista de hojas) y la vieja (una sola URL).
+const SHEET_URLS = (
+  Array.isArray(config.stockSheetCsvUrls)
+    ? config.stockSheetCsvUrls
+    : [config.stockSheetCsvUrl]
+).filter(Boolean)
+
 export function StoreProvider({ children }) {
-  const hasSheet = Boolean(config.stockSheetCsvUrl)
+  const hasSheet = SHEET_URLS.length > 0
 
   // Productos: arrancan del caché o del seed; luego se refrescan de la hoja.
   const [products, setProducts] = useState(() =>
@@ -45,7 +52,7 @@ export function StoreProvider({ children }) {
     setLoading(true)
     setError(null)
     try {
-      const data = await fetchStock(config.stockSheetCsvUrl)
+      const data = await fetchStock(SHEET_URLS)
       if (!mounted.current) return
       setProducts(data)
       setLastUpdated(Date.now())

@@ -32,7 +32,7 @@ function parseCategoria(v) {
 }
 
 // Convierte una fila (objeto con claves normalizadas) en un producto.
-function rowToProduct(row, index) {
+function rowToProduct(row, index, prefix) {
   const get = (...names) => {
     for (const n of names) {
       if (row[n] != null && row[n] !== '') return row[n]
@@ -46,7 +46,8 @@ function rowToProduct(row, index) {
   return {
     id:
       String(get('id')).trim() ||
-      'sheet-' +
+      prefix +
+        '-' +
         index +
         '-' +
         nombre.toLowerCase().replace(/\s+/g, '-').slice(0, 24),
@@ -66,9 +67,9 @@ function rowToProduct(row, index) {
   }
 }
 
-// Descarga y parsea la planilla publicada como CSV.
-// Devuelve un array de productos. Lanza error si la descarga falla.
-export async function fetchStock(csvUrl) {
+// Descarga y parsea UNA hoja publicada como CSV.
+// `prefix` diferencia los ids cuando hay varias hojas.
+async function fetchSheet(csvUrl, prefix) {
   const sep = csvUrl.includes('?') ? '&' : '?'
   const res = await fetch(csvUrl + sep + 't=' + Date.now()) // evita caché
   if (!res.ok)
@@ -82,6 +83,15 @@ export async function fetchStock(csvUrl) {
   })
 
   return parsed.data
-    .map((row, i) => rowToProduct(row, i))
+    .map((row, i) => rowToProduct(row, i, prefix))
     .filter(Boolean)
+}
+
+// Descarga una o varias hojas y devuelve todos los productos juntos.
+export async function fetchStock(csvUrls) {
+  const urls = (Array.isArray(csvUrls) ? csvUrls : [csvUrls]).filter(Boolean)
+  const hojas = await Promise.all(
+    urls.map((url, i) => fetchSheet(url, 'h' + i)),
+  )
+  return hojas.flat()
 }

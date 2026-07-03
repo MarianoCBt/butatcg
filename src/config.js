@@ -35,16 +35,27 @@ export const config = {
 
   // -------------------------------------------------------------------
   //  FUENTE DE STOCK (Google Sheets publicado como CSV)
-  //  Cómo obtener este link:
+  //  Podés usar UNA o VARIAS hojas (ej: accesorios / preventas y pedidos /
+  //  stock inmediato). El sitio las junta todas en un solo catálogo.
+  //
+  //  Cómo obtener el link de CADA hoja:
   //   1) Abrí tu planilla en Google Sheets.
   //   2) Archivo → Compartir → Publicar en la web.
-  //   3) Elegí la hoja, formato "Valores separados por comas (.csv)".
-  //   4) Publicar → copiá el link y pegalo acá abajo.
+  //   3) En el desplegable elegí LA HOJA (no "Todo el documento"),
+  //      formato "Valores separados por comas (.csv)".
+  //   4) Publicar → copiá el link y agregalo a la lista de abajo.
+  //      Cada hoja tiene su propio link (cambia el "gid=").
   //  La planilla queda privada para editar; sólo se publica una vista
-  //  de SÓLO LECTURA que el sitio consume.
-  //  Si lo dejás vacío, el sitio muestra datos de ejemplo.
+  //  de SÓLO LECTURA. Si la lista queda vacía, se muestran datos de ejemplo.
   // -------------------------------------------------------------------
-  stockSheetCsvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vReQyGvQ6u6Dd1ct9gsO2BYO-2DcEwTUc4eBvI_NTzx7WvNreI4tJctVV_kvTrTIw/pub?output=csv',
+  stockSheetCsvUrls: [
+    // Stock inmediato
+    'https://docs.google.com/spreadsheets/d/e/2PACX-1vREo5RxJcY3C9pCaOhwM6fqOvfQvV25t5v4Y0Dg0bDv2eyHhHZGY7y7sqh7wl1nJQ/pub?gid=936437257&single=true&output=csv',
+    // Preventas y pedidos
+    'https://docs.google.com/spreadsheets/d/e/2PACX-1vREo5RxJcY3C9pCaOhwM6fqOvfQvV25t5v4Y0Dg0bDv2eyHhHZGY7y7sqh7wl1nJQ/pub?gid=1984966268&single=true&output=csv',
+    // Accesorios
+    'https://docs.google.com/spreadsheets/d/e/2PACX-1vREo5RxJcY3C9pCaOhwM6fqOvfQvV25t5v4Y0Dg0bDv2eyHhHZGY7y7sqh7wl1nJQ/pub?gid=516287969&single=true&output=csv',
+  ],
 
   // Cada cuánto refrescar el stock automáticamente (minutos)
   refreshMinutes: 10,
