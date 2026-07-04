@@ -48,6 +48,33 @@ export function idiomaDeCodigo(codigo) {
   return m ? IDIOMAS[m[2]] || '' : ''
 }
 
+// Idiomas elegibles al cargar una carta y la región que va en el código.
+export const IDIOMAS_ELEGIBLES = [
+  'Inglés',
+  'Español',
+  'Francés',
+  'Alemán',
+  'Italiano',
+  'Portugués',
+]
+const REGION_POR_IDIOMA = {
+  Inglés: 'EN',
+  Español: 'SP',
+  Francés: 'FR',
+  Alemán: 'DE',
+  Italiano: 'IT',
+  Portugués: 'PT',
+}
+
+// Reescribe la región de un código según el idioma de la copia física
+// (RA05-EN028 + Español -> RA05-SP028). Para inglés se deja como está.
+export function codigoParaIdioma(codigo, idioma) {
+  const region = REGION_POR_IDIOMA[idioma]
+  const m = SETCODE_REGEX.exec(codigo || '')
+  if (!m || !region || region === 'EN') return codigo
+  return `${m[1]}-${region}${m[3]}`
+}
+
 // ---------------------------------------------------------------------
 //  Extracción tolerante de códigos desde texto de OCR.
 //  El OCR confunde caracteres parecidos (O↔0, S↔5, I↔1, B↔8…); acá se
@@ -183,4 +210,109 @@ export async function buscarPorCodigo(codigoCrudo) {
     }
   }
   return null
+}
+
+// ---------------------------------------------------------------------
+//  Búsqueda por NOMBRE (el texto grande de la carta: mucho más legible
+//  para el OCR que el código). Devuelve la carta con TODAS sus
+//  impresiones (card_sets) para elegir la versión en un desplegable.
+// ---------------------------------------------------------------------
+
+function normalizarNombre(s) {
+  return String(s || '')
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^A-Z0-9]+/g, ' ')
+    .trim()
+}
+
+// Similitud de Dice sobre bigramas (0..1): tolera letras mal leídas.
+function bigramas(s) {
+  const m = new Map()
+  for (let i = 0; i < s.length - 1; i++) {
+    const b = s.slice(i, i + 2)
+    m.set(b, (m.get(b) || 0) + 1)
+  }
+  return m
+}
+
+function similitud(a, b) {
+  if (!a || !b) return 0
+  const ba = bigramas(a)
+  const bb = bigramas(b)
+  let inter = 0
+  for (const [bg, na] of ba) inter += Math.min(na, bb.get(bg) || 0)
+  const total = a.length - 1 + (b.length - 1)
+  return total > 0 ? (2 * inter) / total : 0
+}
+
+function mapearCarta(c) {
+  return {
+    id: c.id,
+    nombre: c.name,
+    imagen: c.card_images?.[0]?.image_url_small || imagenPorId(c.id),
+    sets: (c.card_sets || []).map((s) => ({
+      codigo: s.set_code || '',
+      setNombre: s.set_name || '',
+      rareza: s.set_rarity || '',
+      precioUsd: parseFloat(s.set_price) || 0,
+    })),
+  }
+}
+
+/** Busca cartas cuyo nombre contenga `texto` (para el autocompletado). */
+export async function buscarPorNombre(texto, num = 12) {
+  const q = String(texto || '').trim()
+  if (q.length < 3) return []
+  const data = await fetchJson(
+    `${CARDINFO_API}?fname=${encodeURIComponent(q)}&num=${num}&offset=0`,
+  )
+  return (data?.data || []).map(mapearCarta)
+}
+
+/**
+ * A partir del texto ruidoso del OCR, intenta identificar UNA carta.
+ * Prueba la frase completa y, si no hay resultados, las palabras más
+ * largas; elige el resultado más parecido al texto leído.
+ * Devuelve `{ ...carta, score }` o `null`.
+ */
+export async function buscarPorTextoOcr(textoCrudo) {
+  // Limpieza suave para consultar (conserva guiones y apóstrofes, que
+  // forman parte de muchos nombres) y normalización dura para comparar.
+  const qCruda = String(textoCrudo || '')
+    .replace(/[^A-Za-z0-9' -]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const q = normalizarNombre(qCruda)
+  if (q.replace(/[^A-Z]/g, '').length < 6) return null
+
+  // Consultas en orden: frase completa, palabras largas y, si ninguna
+  // existe (letras mal leídas), los prefijos de 4 letras de las palabras
+  // más largas (el arranque de una palabra suele leerse bien).
+  const palabras = [...new Set(qCruda.split(' '))]
+    .filter((p) => p.length >= 4)
+    .sort((a, b) => b.length - a.length)
+  const consultas = [
+    qCruda,
+    ...palabras.slice(0, 3),
+    ...palabras.slice(0, 2).map((p) => p.slice(0, 4)),
+  ].filter((c, i, arr) => c.length >= 4 && arr.indexOf(c) === i)
+
+  let resultados = []
+  for (const consulta of consultas) {
+    resultados = await buscarPorNombre(consulta, 30)
+    if (resultados.length) break
+  }
+
+  let mejor = null
+  let mejorScore = 0
+  for (const r of resultados) {
+    const s = similitud(normalizarNombre(r.nombre), q)
+    if (s > mejorScore) {
+      mejorScore = s
+      mejor = r
+    }
+  }
+  return mejor && mejorScore >= 0.55 ? { ...mejor, score: mejorScore } : null
 }

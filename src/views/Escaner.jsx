@@ -1,17 +1,27 @@
 import { useEffect, useRef, useState } from 'react'
 import { config } from '../config'
 import { formatMoney } from '../utils/format'
-import { buscarPorCodigo, extraerCodigos } from '../data/ygoprodeck'
+import {
+  IDIOMAS_ELEGIBLES,
+  buscarPorCodigo,
+  buscarPorNombre,
+  buscarPorTextoOcr,
+  codigoParaIdioma,
+  extraerCodigos,
+} from '../data/ygoprodeck'
 
 // =====================================================================
 //  ESCÁNER DE CARTAS (vista oculta, se abre con  #escaner)
-//  Apuntás la cámara al código de set de la carta (ej: RA03-SP001),
-//  el OCR lo lee, YGOPRODeck trae nombre/rareza/imagen y precio de
-//  referencia de TCGPlayer, y se arma una lista que se descarga como
-//  CSV con el formato de la planilla. El precio de venta lo cargás vos.
+//  Apuntás la cámara al NOMBRE de la carta (el texto grande de arriba,
+//  mucho más legible que el código chiquito). El OCR lo lee, YGOPRODeck
+//  trae la carta con todas sus impresiones, y elegís de un desplegable
+//  la versión (código + rareza) y el idioma de tu copia. También se
+//  puede tipear el nombre (con autocompletado) o el código exacto.
+//  La lista se exporta como CSV con el formato de la planilla.
 // =====================================================================
 
 const LS_ITEMS = 'buta.escaner.items'
+const LS_IDIOMA = 'buta.escaner.idioma'
 
 const CONDICIONES = [
   'Near Mint',
@@ -21,12 +31,12 @@ const CONDICIONES = [
   'Damaged',
 ]
 
-// Zona del cuadro guía, como fracción del video (el código va ahí adentro).
-const GUIA = { x: 0.15, y: 0.42, w: 0.7, h: 0.14 }
+// Zona del cuadro guía, como fracción del video (el nombre va ahí adentro).
+const GUIA = { x: 0.08, y: 0.42, w: 0.84, h: 0.14 }
 
-// Si un código falló hace menos de esto, no se re-consulta (evita spamear
-// la API con la misma lectura errónea en cada frame).
-const REINTENTO_MS = 10000
+// Si algo falló o se descartó hace menos de esto, no se vuelve a ofrecer
+// (evita que el mismo cuadro reabra el modal o se re-consulte la API).
+const REINTENTO_MS = 8000
 
 function leerItems() {
   try {
@@ -36,6 +46,15 @@ function leerItems() {
   } catch {
     return []
   }
+}
+
+function idiomaGuardado() {
+  const v = localStorage.getItem(LS_IDIOMA)
+  return IDIOMAS_ELEGIBLES.includes(v) ? v : 'Inglés'
+}
+
+function esCodigoDeSet(texto) {
+  return /^[A-Z0-9]{2,5}-[A-Z0-9]{3,7}$/i.test(texto.trim())
 }
 
 function csvCell(v) {
@@ -73,8 +92,10 @@ export default function Escaner() {
   const [estado, setEstado] = useState('')
   const [lectura, setLectura] = useState('') // último texto crudo del OCR
   const [buscando, setBuscando] = useState(false)
-  const [pendiente, setPendiente] = useState(null) // carta encontrada, a confirmar
-  const [codigoManual, setCodigoManual] = useState('')
+  // Carta encontrada, a confirmar: { nombre, imagen, sets, setIdx, idioma }
+  const [pendiente, setPendiente] = useState(null)
+  const [entrada, setEntrada] = useState('') // input de nombre o código
+  const [sugerencias, setSugerencias] = useState([])
   const [aviso, setAviso] = useState('')
   const [zoom, setZoom] = useState(null) // { min, max, step, valor } si la cámara lo soporta
 
@@ -86,7 +107,9 @@ export default function Escaner() {
   const canvasRef = useRef(null)
   const debugRef = useRef(null) // canvas visible con la imagen procesada
   const pasadaRef = useRef(0) // alterna el modo de preprocesado
-  const fallidosRef = useRef(new Map()) // codigo -> timestamp del último fallo
+  const cooldownRef = useRef(new Map()) // clave -> ts (fallos y descartes recientes)
+  const ultimaBusquedaRef = useRef({ q: '', t: 0 }) // throttle de búsqueda por nombre
+  const busquedaTokenRef = useRef(0) // descarta respuestas viejas del autocompletado
   const avisoTimer = useRef(null)
 
   // ---- persistencia -------------------------------------------------
@@ -104,10 +127,29 @@ export default function Escaner() {
     }
   }, [camaraActiva])
 
+  // Autocompletado por nombre (con debounce; ignora códigos de set).
+  useEffect(() => {
+    const q = entrada.trim()
+    if (q.length < 3 || esCodigoDeSet(q)) {
+      setSugerencias([])
+      return
+    }
+    const token = ++busquedaTokenRef.current
+    const timer = setTimeout(async () => {
+      const rs = await buscarPorNombre(q).catch(() => [])
+      if (busquedaTokenRef.current === token) setSugerencias(rs.slice(0, 6))
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [entrada])
+
   function mostrarAviso(texto) {
     setAviso(texto)
     clearTimeout(avisoTimer.current)
     avisoTimer.current = setTimeout(() => setAviso(''), 2500)
+  }
+
+  function enCooldown(clave) {
+    return Date.now() - (cooldownRef.current.get(clave) || 0) < REINTENTO_MS
   }
 
   // ---- cámara + OCR -------------------------------------------------
@@ -139,13 +181,10 @@ export default function Escaner() {
       const { createWorker } = await import('tesseract.js')
       const worker = await createWorker('eng')
       await worker.setParameters({
-        tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-',
         tessedit_pageseg_mode: '7', // una sola línea de texto
       })
       workerRef.current = worker
-      setEstado(
-        'Encuadrá el código dentro del recuadro, lo más cerca que enfoque.',
-      )
+      setEstado('Encuadrá el NOMBRE de la carta dentro del recuadro.')
       loopRef.current = true
       pausadoRef.current = false
       loopOcr()
@@ -153,8 +192,8 @@ export default function Escaner() {
       apagarCamara()
       setEstado(
         e?.name === 'NotAllowedError'
-          ? 'Permiso de cámara denegado. Podés cargar el código a mano abajo.'
-          : 'No se pudo abrir la cámara. Podés cargar el código a mano abajo.',
+          ? 'Permiso de cámara denegado. Podés buscar por nombre abajo.'
+          : 'No se pudo abrir la cámara. Podés buscar por nombre abajo.',
       )
     }
   }
@@ -304,9 +343,14 @@ export default function Escaner() {
             const { data } = await workerRef.current.recognize(canvas)
             const texto = (data?.text || '').replace(/\s+/g, ' ').trim()
             if (texto) setLectura(texto.slice(0, 40))
-            const candidatos = filtrarFallidos(extraerCodigos(texto))
-            if (candidatos.length && loopRef.current && !pausadoRef.current) {
-              await encontrado(candidatos)
+            if (loopRef.current && !pausadoRef.current) {
+              // Si en el recuadro hay un código de set, se usa directo;
+              // si no, se intenta identificar la carta por el nombre.
+              const codigos = extraerCodigos(texto).filter(
+                (c) => !enCooldown(c),
+              )
+              if (codigos.length) await encontradoCodigo(codigos)
+              else await intentarNombre(texto)
             }
           }
         } catch {
@@ -317,15 +361,7 @@ export default function Escaner() {
     }
   }
 
-  // Saca los candidatos que ya fallaron hace poco.
-  function filtrarFallidos(candidatos) {
-    const ahora = Date.now()
-    return candidatos.filter(
-      (c) => ahora - (fallidosRef.current.get(c) || 0) > REINTENTO_MS,
-    )
-  }
-
-  async function encontrado(candidatos) {
+  async function encontradoCodigo(candidatos) {
     pausadoRef.current = true
     setBuscando(true)
     setEstado(`Código leído: ${candidatos[0]}. Buscando carta…`)
@@ -333,13 +369,25 @@ export default function Escaner() {
     for (const codigo of candidatos.slice(0, 3)) {
       carta = await buscarPorCodigo(codigo).catch(() => null)
       if (carta) break
-      fallidosRef.current.set(codigo, Date.now())
+      cooldownRef.current.set(codigo, Date.now())
     }
     setBuscando(false)
     if (carta) {
-      navigator.vibrate?.(60)
-      setPendiente(carta)
-      setEstado('')
+      abrirPendiente(
+        {
+          nombre: carta.nombre,
+          imagen: carta.imagen,
+          sets: [
+            {
+              codigo: carta.codigo,
+              setNombre: carta.setNombre,
+              rareza: carta.rareza,
+              precioUsd: carta.precioUsd,
+            },
+          ],
+        },
+        carta.idioma,
+      )
     } else {
       setEstado(
         `Leí "${candidatos[0]}" pero no encontré la carta. Seguí intentando.`,
@@ -348,31 +396,101 @@ export default function Escaner() {
     }
   }
 
-  // ---- alta manual ---------------------------------------------------
+  async function intentarNombre(texto) {
+    const q = texto.toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim()
+    if (q.replace(/[^A-Z]/g, '').length < 6) return
+    const ahora = Date.now()
+    const ultima = ultimaBusquedaRef.current
+    if (q === ultima.q || ahora - ultima.t < 1500) return
+    ultimaBusquedaRef.current = { q, t: ahora }
+    const carta = await buscarPorTextoOcr(texto).catch(() => null)
+    if (
+      carta &&
+      loopRef.current &&
+      !pausadoRef.current &&
+      !enCooldown(carta.nombre)
+    ) {
+      abrirPendiente(carta)
+    }
+  }
+
+  function abrirPendiente(carta, idioma) {
+    pausadoRef.current = true
+    navigator.vibrate?.(60)
+    setPendiente({
+      nombre: carta.nombre,
+      imagen: carta.imagen,
+      sets: carta.sets || [],
+      setIdx: 0,
+      idioma: idioma || idiomaGuardado(),
+    })
+    setEstado('')
+  }
+
+  // ---- alta manual (nombre con autocompletado, o código exacto) ------
   async function buscarManual(e) {
     e.preventDefault()
-    const codigo = codigoManual.trim().toUpperCase()
-    if (!codigo) return
+    const q = entrada.trim()
+    if (!q) return
     setBuscando(true)
-    setEstado(`Buscando ${codigo}…`)
-    const carta = await buscarPorCodigo(codigo).catch(() => null)
-    setBuscando(false)
-    if (carta) {
-      pausadoRef.current = true
-      setPendiente(carta)
-      setEstado('')
-      setCodigoManual('')
-    } else {
-      setEstado(`No encontré ninguna carta con el código ${codigo}.`)
+    setEstado(`Buscando ${q}…`)
+    if (esCodigoDeSet(q)) {
+      const carta = await buscarPorCodigo(q.toUpperCase()).catch(() => null)
+      setBuscando(false)
+      if (carta) {
+        abrirPendiente(
+          {
+            nombre: carta.nombre,
+            imagen: carta.imagen,
+            sets: [
+              {
+                codigo: carta.codigo,
+                setNombre: carta.setNombre,
+                rareza: carta.rareza,
+                precioUsd: carta.precioUsd,
+              },
+            ],
+          },
+          carta.idioma,
+        )
+        setEntrada('')
+        setSugerencias([])
+      } else {
+        setEstado(`No encontré ninguna carta con el código ${q.toUpperCase()}.`)
+      }
+      return
     }
+    const rs =
+      sugerencias.length > 0
+        ? sugerencias
+        : await buscarPorNombre(q).catch(() => [])
+    setBuscando(false)
+    if (rs.length) {
+      elegirSugerencia(rs[0])
+    } else {
+      setEstado(`No encontré ninguna carta que se llame "${q}".`)
+    }
+  }
+
+  function elegirSugerencia(carta) {
+    abrirPendiente(carta)
+    setEntrada('')
+    setSugerencias([])
   }
 
   // ---- lista ---------------------------------------------------------
   function agregarPendiente() {
-    const c = pendiente
-    if (!c) return
+    const p = pendiente
+    if (!p) return
+    const s = p.sets[p.setIdx] || {}
+    const codigo = codigoParaIdioma(s.codigo || '', p.idioma)
+    const clave = codigo || `${p.nombre}|${s.rareza || ''}`
+    localStorage.setItem(LS_IDIOMA, p.idioma)
+    cooldownRef.current.set(p.nombre, Date.now())
     setItems((prev) => {
-      const i = prev.findIndex((it) => it.codigo === c.codigo)
+      const i = prev.findIndex(
+        (it) => (it.codigo || `${it.nombre}|${it.rareza}`) === clave,
+      )
       if (i >= 0) {
         const copia = [...prev]
         copia[i] = { ...copia[i], cantidad: copia[i].cantidad + 1 }
@@ -380,14 +498,14 @@ export default function Escaner() {
       }
       return [
         {
-          id: `${c.codigo}-${Date.now()}`,
-          nombre: c.nombre,
-          codigo: c.codigo,
-          setNombre: c.setNombre,
-          rareza: c.rareza,
-          idioma: c.idioma,
-          imagen: c.imagen,
-          precioUsd: c.precioUsd,
+          id: `${clave}-${Date.now()}`,
+          nombre: p.nombre,
+          codigo,
+          setNombre: s.setNombre || '',
+          rareza: s.rareza || '',
+          idioma: p.idioma,
+          imagen: p.imagen,
+          precioUsd: s.precioUsd || 0,
           precio: 0, // el precio de venta lo cargás vos
           cantidad: 1,
           condicion: 'Near Mint',
@@ -395,15 +513,18 @@ export default function Escaner() {
         ...prev,
       ]
     })
-    mostrarAviso(`Agregada: ${c.nombre}`)
-    cerrarPendiente()
+    mostrarAviso(`Agregada: ${p.nombre}`)
+    cerrarPendiente(false)
   }
 
-  function cerrarPendiente() {
+  function cerrarPendiente(registrarDescarte = true) {
+    if (registrarDescarte && pendiente) {
+      cooldownRef.current.set(pendiente.nombre, Date.now())
+    }
     setPendiente(null)
     pausadoRef.current = false
     if (camaraActiva)
-      setEstado('Encuadrá el código dentro del recuadro, lo más cerca que enfoque.')
+      setEstado('Encuadrá el NOMBRE de la carta dentro del recuadro.')
   }
 
   function editarItem(id, campo, valor) {
@@ -459,6 +580,7 @@ export default function Escaner() {
   }
 
   const totalCartas = items.reduce((acc, it) => acc + it.cantidad, 0)
+  const setElegido = pendiente?.sets[pendiente.setIdx]
 
   // ---- UI --------------------------------------------------------------
   return (
@@ -496,7 +618,7 @@ export default function Escaner() {
               autoPlay
               className="block w-full"
             />
-            {/* Cuadro guía: el código de la carta va acá adentro */}
+            {/* Cuadro guía: el nombre de la carta va acá adentro */}
             <div
               className="pointer-events-none absolute rounded-lg border-2 border-[var(--color-brand)]"
               style={{
@@ -533,12 +655,9 @@ export default function Escaner() {
           <div className="flex flex-col items-center gap-3 p-6 text-center">
             <span className="text-4xl">📷</span>
             <p className="text-sm text-[var(--color-muted)]">
-              Apuntá la cámara al <strong>código de set</strong> de la carta
-              (abajo a la derecha del arte, ej.{' '}
-              <code className="rounded bg-[var(--color-surface-2)] px-1">
-                RA03-SP001
-              </code>
-              ).
+              Apuntá la cámara al <strong>nombre de la carta</strong> (el
+              texto grande de arriba). Después elegís la versión y el idioma
+              de un desplegable.
             </p>
             <button
               onClick={prenderCamara}
@@ -567,24 +686,57 @@ export default function Escaner() {
         )}
       </section>
 
-      {/* Alta manual (fallback del OCR) */}
-      <form onSubmit={buscarManual} className="flex gap-2">
-        <input
-          value={codigoManual}
-          onChange={(e) => setCodigoManual(e.target.value)}
-          placeholder="O escribí el código: RA03-SP001"
-          autoCapitalize="characters"
-          autoCorrect="off"
-          spellCheck={false}
-          className="min-w-0 flex-1 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5 text-sm placeholder:text-[var(--color-faint)]"
-        />
-        <button
-          type="submit"
-          disabled={buscando || !codigoManual.trim()}
-          className="rounded-xl bg-[var(--color-brand)] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[var(--color-brand-dark)] disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Buscar
-        </button>
+      {/* Alta manual: nombre con autocompletado, o código exacto */}
+      <form onSubmit={buscarManual} className="flex flex-col gap-2">
+        <div className="flex gap-2">
+          <input
+            value={entrada}
+            onChange={(e) => setEntrada(e.target.value)}
+            placeholder="Nombre de la carta o código (RA05-EN028)"
+            autoCorrect="off"
+            spellCheck={false}
+            className="min-w-0 flex-1 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5 text-sm placeholder:text-[var(--color-faint)]"
+          />
+          <button
+            type="submit"
+            disabled={buscando || !entrada.trim()}
+            className="rounded-xl bg-[var(--color-brand)] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[var(--color-brand-dark)] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Buscar
+          </button>
+        </div>
+        {sugerencias.length > 0 && (
+          <ul className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]">
+            {sugerencias.map((s) => (
+              <li key={s.id}>
+                <button
+                  type="button"
+                  onClick={() => elegirSugerencia(s)}
+                  className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-[var(--color-surface-2)]"
+                >
+                  <div className="h-10 w-7 shrink-0 overflow-hidden rounded bg-[var(--color-surface-2)]">
+                    {s.imagen && (
+                      <img
+                        src={s.imagen}
+                        alt=""
+                        loading="lazy"
+                        className="h-full w-full object-contain"
+                        onError={(e) => (e.currentTarget.style.display = 'none')}
+                      />
+                    )}
+                  </div>
+                  <span className="min-w-0 flex-1 truncate text-sm">
+                    {s.nombre}
+                  </span>
+                  <span className="text-xs text-[var(--color-faint)]">
+                    {s.sets.length}{' '}
+                    {s.sets.length === 1 ? 'versión' : 'versiones'}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </form>
 
       {/* Lista escaneada */}
@@ -635,7 +787,7 @@ export default function Escaner() {
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-semibold">{it.nombre}</p>
               <p className="truncate text-xs text-[var(--color-muted)]">
-                {it.codigo} · {it.rareza || 'Sin rareza'}
+                {it.codigo || 'Sin código'} · {it.rareza || 'Sin rareza'}
                 {it.idioma ? ` · ${it.idioma}` : ''}
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -728,11 +880,11 @@ export default function Escaner() {
         </div>
       )}
 
-      {/* Carta encontrada: confirmar antes de agregar */}
+      {/* Carta encontrada: elegir versión + idioma antes de agregar */}
       {pendiente && (
         <div
           className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 sm:items-center"
-          onClick={cerrarPendiente}
+          onClick={() => cerrarPendiente()}
         >
           <div
             className="w-full max-w-sm rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
@@ -753,20 +905,13 @@ export default function Escaner() {
                   </div>
                 )}
               </div>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="font-semibold leading-snug">{pendiente.nombre}</p>
-                <p className="mt-1 text-xs text-[var(--color-muted)]">
-                  {pendiente.codigo}
-                  {pendiente.rareza ? ` · ${pendiente.rareza}` : ''}
-                </p>
-                <p className="text-xs text-[var(--color-faint)]">
-                  {pendiente.setNombre}
-                </p>
                 <p className="mt-2 text-sm">
-                  {pendiente.precioUsd > 0 ? (
+                  {setElegido?.precioUsd > 0 ? (
                     <>
                       Ref. TCGPlayer:{' '}
-                      <strong>US$ {pendiente.precioUsd}</strong>
+                      <strong>US$ {setElegido.precioUsd}</strong>
                     </>
                   ) : (
                     <span className="text-[var(--color-faint)]">
@@ -776,6 +921,53 @@ export default function Escaner() {
                 </p>
               </div>
             </div>
+
+            <div className="mt-3 flex flex-col gap-2">
+              <label className="text-xs text-[var(--color-muted)]">
+                Versión (código · rareza)
+                <select
+                  value={pendiente.setIdx}
+                  onChange={(e) =>
+                    setPendiente((p) => ({
+                      ...p,
+                      setIdx: Number(e.target.value),
+                    }))
+                  }
+                  className="mt-1 block w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-2 text-sm"
+                >
+                  {pendiente.sets.map((s, i) => (
+                    <option key={`${s.codigo}-${i}`} value={i}>
+                      {s.codigo || 'Sin código'} · {s.rareza || 'Sin rareza'}
+                    </option>
+                  ))}
+                  {pendiente.sets.length === 0 && (
+                    <option value={0}>Sin versiones conocidas</option>
+                  )}
+                </select>
+              </label>
+              {setElegido?.setNombre && (
+                <p className="text-xs text-[var(--color-faint)]">
+                  {setElegido.setNombre}
+                </p>
+              )}
+              <label className="text-xs text-[var(--color-muted)]">
+                Idioma de tu copia
+                <select
+                  value={pendiente.idioma}
+                  onChange={(e) =>
+                    setPendiente((p) => ({ ...p, idioma: e.target.value }))
+                  }
+                  className="mt-1 block w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-2 text-sm"
+                >
+                  {IDIOMAS_ELEGIBLES.map((i) => (
+                    <option key={i} value={i}>
+                      {i}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
             <div className="mt-4 flex gap-2">
               <button
                 onClick={agregarPendiente}
@@ -784,7 +976,7 @@ export default function Escaner() {
                 Agregar
               </button>
               <button
-                onClick={cerrarPendiente}
+                onClick={() => cerrarPendiente()}
                 className="rounded-xl border border-[var(--color-border)] px-4 py-2.5 text-sm hover:bg-[var(--color-surface-2)]"
               >
                 Descartar
