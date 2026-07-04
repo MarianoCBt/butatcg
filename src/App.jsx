@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { Suspense, lazy, useEffect, useRef, useState } from 'react'
 import { StoreProvider, useStore } from './store/StoreContext'
 import Header from './components/Header'
 import Banner from './components/Banner'
@@ -67,7 +67,37 @@ function Shell() {
   )
 }
 
+// Herramienta privada del dueño (no aparece en el menú): se abre con #escaner.
+// Va con lazy() para que el visitante común no descargue nada del escáner.
+const Escaner = lazy(() => import('./views/Escaner'))
+
+function useHash() {
+  const [hash, setHash] = useState(() => window.location.hash)
+  useEffect(() => {
+    const onChange = () => setHash(window.location.hash)
+    window.addEventListener('hashchange', onChange)
+    return () => window.removeEventListener('hashchange', onChange)
+  }, [])
+  return hash
+}
+
 export default function App() {
+  const hash = useHash()
+
+  if (hash === '#escaner') {
+    return (
+      <Suspense
+        fallback={
+          <p className="p-6 text-center text-sm text-[var(--color-muted)]">
+            Cargando escáner…
+          </p>
+        }
+      >
+        <Escaner />
+      </Suspense>
+    )
+  }
+
   return (
     <StoreProvider>
       <Shell />
