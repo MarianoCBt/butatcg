@@ -1,22 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import { config } from '../config'
 import { formatMoney } from '../utils/format'
-import {
-  SETCODE_REGEX,
-  buscarPorCodigo,
-  calcularPrecio,
-  PRECIO,
-} from '../data/ygoprodeck'
+import { buscarPorCodigo, extraerCodigos } from '../data/ygoprodeck'
 
 // =====================================================================
 //  ESCÁNER DE CARTAS (vista oculta, se abre con  #escaner)
 //  Apuntás la cámara al código de set de la carta (ej: RA03-SP001),
-//  el OCR lo lee, YGOPRODeck trae nombre/rareza/imagen y se arma una
-//  lista que se descarga como CSV con el formato de la planilla.
+//  el OCR lo lee, YGOPRODeck trae nombre/rareza/imagen y precio de
+//  referencia de TCGPlayer, y se arma una lista que se descarga como
+//  CSV con el formato de la planilla. El precio de venta lo cargás vos.
 // =====================================================================
 
 const LS_ITEMS = 'buta.escaner.items'
-const LS_COTIZACION = 'buta.escaner.cotizacion'
 
 const CONDICIONES = [
   'Near Mint',
@@ -27,7 +22,11 @@ const CONDICIONES = [
 ]
 
 // Zona del cuadro guía, como fracción del video (el código va ahí adentro).
-const GUIA = { x: 0.1, y: 0.4, w: 0.8, h: 0.2 }
+const GUIA = { x: 0.125, y: 0.42, w: 0.75, h: 0.16 }
+
+// Si un código falló hace menos de esto, no se re-consulta (evita spamear
+// la API con la misma lectura errónea en cada frame).
+const REINTENTO_MS = 10000
 
 function leerItems() {
   try {
@@ -70,15 +69,14 @@ function itemAFila(it) {
 
 export default function Escaner() {
   const [items, setItems] = useState(leerItems)
-  const [cotizacion, setCotizacion] = useState(
-    () => Number(localStorage.getItem(LS_COTIZACION)) || 0,
-  )
   const [camaraActiva, setCamaraActiva] = useState(false)
   const [estado, setEstado] = useState('')
+  const [lectura, setLectura] = useState('') // último texto crudo del OCR
   const [buscando, setBuscando] = useState(false)
   const [pendiente, setPendiente] = useState(null) // carta encontrada, a confirmar
   const [codigoManual, setCodigoManual] = useState('')
   const [aviso, setAviso] = useState('')
+  const [zoom, setZoom] = useState(null) // { min, max, step, valor } si la cámara lo soporta
 
   const videoRef = useRef(null)
   const streamRef = useRef(null)
@@ -86,6 +84,7 @@ export default function Escaner() {
   const loopRef = useRef(false) // el loop de OCR sigue vivo
   const pausadoRef = useRef(false) // pausa mientras hay carta pendiente
   const canvasRef = useRef(null)
+  const fallidosRef = useRef(new Map()) // codigo -> timestamp del último fallo
   const avisoTimer = useRef(null)
 
   // ---- persistencia -------------------------------------------------
@@ -93,11 +92,15 @@ export default function Escaner() {
     localStorage.setItem(LS_ITEMS, JSON.stringify(items))
   }, [items])
 
-  useEffect(() => {
-    localStorage.setItem(LS_COTIZACION, String(cotizacion || 0))
-  }, [cotizacion])
-
   useEffect(() => () => apagarCamara(), [])
+
+  // Conecta el stream al <video> recién cuando el elemento existe.
+  useEffect(() => {
+    if (camaraActiva && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current
+      videoRef.current.play().catch(() => {})
+    }
+  }, [camaraActiva])
 
   function mostrarAviso(texto) {
     setAviso(texto)
@@ -114,15 +117,23 @@ export default function Escaner() {
         audio: false,
       })
       streamRef.current = stream
+      const track = stream.getVideoTracks()[0]
+      // Enfoque continuo y zoom, si el teléfono los soporta.
+      track
+        .applyConstraints({ advanced: [{ focusMode: 'continuous' }] })
+        .catch(() => {})
+      const caps = track.getCapabilities?.()
+      if (caps?.zoom) {
+        const valor = track.getSettings?.().zoom ?? caps.zoom.min
+        setZoom({
+          min: caps.zoom.min,
+          max: caps.zoom.max,
+          step: caps.zoom.step || 0.1,
+          valor,
+        })
+      }
       setCamaraActiva(true)
-      // El <video> se monta recién al cambiar el estado.
-      requestAnimationFrame(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream
-          videoRef.current.play().catch(() => {})
-        }
-      })
-      setEstado('Cargando lector (primera vez tarda unos segundos)…')
+      setEstado('Cargando lector (la primera vez tarda unos segundos)…')
       const { createWorker } = await import('tesseract.js')
       const worker = await createWorker('eng')
       await worker.setParameters({
@@ -130,7 +141,9 @@ export default function Escaner() {
         tessedit_pageseg_mode: '7', // una sola línea de texto
       })
       workerRef.current = worker
-      setEstado('Encuadrá el código de la carta dentro del recuadro.')
+      setEstado(
+        'Encuadrá el código dentro del recuadro, lo más cerca que enfoque.',
+      )
       loopRef.current = true
       pausadoRef.current = false
       loopOcr()
@@ -151,10 +164,22 @@ export default function Escaner() {
     workerRef.current?.terminate().catch(() => {})
     workerRef.current = null
     setCamaraActiva(false)
+    setZoom(null)
+    setLectura('')
     clearTimeout(avisoTimer.current)
   }
 
-  // Recorta la zona del cuadro guía, la agranda y mejora el contraste.
+  function aplicarZoom(valor) {
+    setZoom((z) => (z ? { ...z, valor } : z))
+    streamRef.current
+      ?.getVideoTracks()[0]
+      ?.applyConstraints({ advanced: [{ zoom: valor }] })
+      .catch(() => {})
+  }
+
+  // Recorta la zona del cuadro guía y la binariza (blanco y negro) para
+  // que el OCR lea mejor. Si el texto es claro sobre fondo oscuro, se
+  // invierte solo.
   function capturarZona() {
     const video = videoRef.current
     if (!video || !video.videoWidth) return null
@@ -162,28 +187,58 @@ export default function Escaner() {
     const sy = video.videoHeight * GUIA.y
     const sw = video.videoWidth * GUIA.w
     const sh = video.videoHeight * GUIA.h
-    const escala = 3
+    const escala = Math.min(3, Math.max(1, 1400 / sw))
     const canvas = canvasRef.current || document.createElement('canvas')
     canvasRef.current = canvas
-    canvas.width = sw * escala
-    canvas.height = sh * escala
+    canvas.width = Math.round(sw * escala)
+    canvas.height = Math.round(sh * escala)
     const ctx = canvas.getContext('2d', { willReadFrequently: true })
     ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height)
-    // Escala de grises + estiramiento de contraste (ayuda al OCR).
+
     const img = ctx.getImageData(0, 0, canvas.width, canvas.height)
     const d = img.data
-    let min = 255
-    let max = 0
+    // Escala de grises + histograma para umbral de Otsu.
+    const histo = new Array(256).fill(0)
     for (let i = 0; i < d.length; i += 4) {
-      const g = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114
+      const g = Math.round(d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114)
       d[i] = g
-      if (g < min) min = g
-      if (g > max) max = g
+      histo[g]++
     }
-    const rango = Math.max(1, max - min)
+    const total = d.length / 4
+    let suma = 0
+    for (let t = 0; t < 256; t++) suma += t * histo[t]
+    let sumaFondo = 0
+    let pesoFondo = 0
+    let maxVarianza = 0
+    let umbral = 127
+    for (let t = 0; t < 256; t++) {
+      pesoFondo += histo[t]
+      if (pesoFondo === 0) continue
+      const pesoFrente = total - pesoFondo
+      if (pesoFrente === 0) break
+      sumaFondo += t * histo[t]
+      const mediaFondo = sumaFondo / pesoFondo
+      const mediaFrente = (suma - sumaFondo) / pesoFrente
+      const varianza =
+        pesoFondo * pesoFrente * (mediaFondo - mediaFrente) ** 2
+      if (varianza > maxVarianza) {
+        maxVarianza = varianza
+        umbral = t
+      }
+    }
+    // Binariza; si quedó mayoría oscura, invierte (tesseract espera
+    // texto oscuro sobre fondo claro).
+    let oscuros = 0
     for (let i = 0; i < d.length; i += 4) {
-      const g = ((d[i] - min) / rango) * 255
-      d[i] = d[i + 1] = d[i + 2] = g
+      const v = d[i] > umbral ? 255 : 0
+      if (v === 0) oscuros++
+      d[i] = d[i + 1] = d[i + 2] = v
+    }
+    if (oscuros > total / 2) {
+      for (let i = 0; i < d.length; i += 4) {
+        const v = 255 - d[i]
+        d[i] = d[i + 1] = d[i + 2] = v
+      }
     }
     ctx.putImageData(img, 0, 0)
     return canvas
@@ -196,36 +251,49 @@ export default function Escaner() {
           const canvas = capturarZona()
           if (canvas) {
             const { data } = await workerRef.current.recognize(canvas)
-            const texto = (data?.text || '').toUpperCase()
-            const m = SETCODE_REGEX.exec(texto.replace(/\s+/g, ''))
-            if (m && loopRef.current && !pausadoRef.current) {
-              await encontrado(m[0])
+            const texto = (data?.text || '').replace(/\s+/g, ' ').trim()
+            if (texto) setLectura(texto.slice(0, 40))
+            const candidatos = filtrarFallidos(extraerCodigos(texto))
+            if (candidatos.length && loopRef.current && !pausadoRef.current) {
+              await encontrado(candidatos)
             }
           }
         } catch {
           /* frame malo: se intenta de nuevo */
         }
       }
-      await new Promise((r) => setTimeout(r, 350))
+      await new Promise((r) => setTimeout(r, 300))
     }
   }
 
-  async function encontrado(codigo) {
+  // Saca los candidatos que ya fallaron hace poco.
+  function filtrarFallidos(candidatos) {
+    const ahora = Date.now()
+    return candidatos.filter(
+      (c) => ahora - (fallidosRef.current.get(c) || 0) > REINTENTO_MS,
+    )
+  }
+
+  async function encontrado(candidatos) {
     pausadoRef.current = true
     setBuscando(true)
-    setEstado(`Código leído: ${codigo}. Buscando carta…`)
-    const carta = await buscarPorCodigo(codigo).catch(() => null)
+    setEstado(`Código leído: ${candidatos[0]}. Buscando carta…`)
+    let carta = null
+    for (const codigo of candidatos.slice(0, 3)) {
+      carta = await buscarPorCodigo(codigo).catch(() => null)
+      if (carta) break
+      fallidosRef.current.set(codigo, Date.now())
+    }
     setBuscando(false)
     if (carta) {
       navigator.vibrate?.(60)
       setPendiente(carta)
       setEstado('')
     } else {
-      setEstado(`Leí "${codigo}" pero no encontré la carta. Seguí intentando.`)
-      // Pausa breve para no re-leer el mismo código erróneo al instante.
-      setTimeout(() => {
-        pausadoRef.current = false
-      }, 1200)
+      setEstado(
+        `Leí "${candidatos[0]}" pero no encontré la carta. Seguí intentando.`,
+      )
+      pausadoRef.current = false
     }
   }
 
@@ -269,7 +337,7 @@ export default function Escaner() {
           idioma: c.idioma,
           imagen: c.imagen,
           precioUsd: c.precioUsd,
-          precio: calcularPrecio(c.precioUsd, cotizacion),
+          precio: 0, // el precio de venta lo cargás vos
           cantidad: 1,
           condicion: 'Near Mint',
         },
@@ -283,7 +351,8 @@ export default function Escaner() {
   function cerrarPendiente() {
     setPendiente(null)
     pausadoRef.current = false
-    if (camaraActiva) setEstado('Encuadrá el código de la carta dentro del recuadro.')
+    if (camaraActiva)
+      setEstado('Encuadrá el código dentro del recuadro, lo más cerca que enfoque.')
   }
 
   function editarItem(id, campo, valor) {
@@ -300,17 +369,6 @@ export default function Escaner() {
         )
         .filter((it) => it.cantidad > 0),
     )
-  }
-
-  function recalcularPrecios() {
-    setItems((prev) =>
-      prev.map((it) =>
-        it.precioUsd > 0
-          ? { ...it, precio: calcularPrecio(it.precioUsd, cotizacion) }
-          : it,
-      ),
-    )
-    mostrarAviso('Precios recalculados con la cotización actual.')
   }
 
   function vaciarLista() {
@@ -404,6 +462,21 @@ export default function Escaner() {
             >
               Apagar
             </button>
+            {zoom && (
+              <div className="absolute inset-x-4 bottom-3 flex items-center gap-2 rounded-xl bg-black/50 px-3 py-2">
+                <span className="text-xs text-white">Zoom</span>
+                <input
+                  type="range"
+                  min={zoom.min}
+                  max={zoom.max}
+                  step={zoom.step}
+                  value={zoom.valor}
+                  onChange={(e) => aplicarZoom(Number(e.target.value))}
+                  aria-label="Zoom de la cámara"
+                  className="min-w-0 flex-1 accent-[var(--color-brand)]"
+                />
+              </div>
+            )}
           </div>
         ) : (
           <div className="flex flex-col items-center gap-3 p-6 text-center">
@@ -429,6 +502,11 @@ export default function Escaner() {
             {buscando ? 'Buscando carta…' : estado}
           </p>
         )}
+        {camaraActiva && (
+          <p className="border-t border-[var(--color-border)] px-4 py-2 font-mono text-xs text-[var(--color-faint)]">
+            Leyendo: {lectura || '…'}
+          </p>
+        )}
       </section>
 
       {/* Alta manual (fallback del OCR) */}
@@ -450,34 +528,6 @@ export default function Escaner() {
           Buscar
         </button>
       </form>
-
-      {/* Cotización del dólar (misma regla de precios que el importador) */}
-      <section className="flex items-center gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
-        <label htmlFor="cotizacion" className="flex-1 text-sm">
-          Cotización USD
-          <span className="block text-xs text-[var(--color-faint)]">
-            precio = USD × cotización × {(1 + PRECIO.MARGEN / 100).toFixed(2)}{' '}
-            + {PRECIO.RECARGO_FIJO}
-          </span>
-        </label>
-        <input
-          id="cotizacion"
-          type="number"
-          inputMode="numeric"
-          min="0"
-          value={cotizacion || ''}
-          onChange={(e) => setCotizacion(Number(e.target.value) || 0)}
-          placeholder="1600"
-          className="w-24 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-1.5 text-right text-sm"
-        />
-        <button
-          onClick={recalcularPrecios}
-          disabled={!items.length || !cotizacion}
-          className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm text-[var(--color-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-ink)] disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Recalcular
-        </button>
-      </section>
 
       {/* Lista escaneada */}
       <section className="flex flex-col gap-2">
@@ -550,7 +600,7 @@ export default function Escaner() {
                     inputMode="numeric"
                     min="0"
                     value={it.precio || ''}
-                    placeholder="0"
+                    placeholder="precio"
                     onChange={(e) =>
                       editarItem(it.id, 'precio', Number(e.target.value) || 0)
                     }
@@ -560,7 +610,7 @@ export default function Escaner() {
                 </label>
                 {it.precioUsd > 0 && (
                   <span className="text-xs text-[var(--color-faint)]">
-                    (US$ {it.precioUsd})
+                    Ref. TCGPlayer: US$ {it.precioUsd}
                   </span>
                 )}
               </div>
@@ -657,16 +707,12 @@ export default function Escaner() {
                 <p className="mt-2 text-sm">
                   {pendiente.precioUsd > 0 ? (
                     <>
-                      US$ {pendiente.precioUsd} →{' '}
-                      <strong>
-                        {formatMoney(
-                          calcularPrecio(pendiente.precioUsd, cotizacion),
-                        )}
-                      </strong>
+                      Ref. TCGPlayer:{' '}
+                      <strong>US$ {pendiente.precioUsd}</strong>
                     </>
                   ) : (
                     <span className="text-[var(--color-faint)]">
-                      Sin precio de referencia (lo cargás a mano)
+                      Sin precio de referencia en TCGPlayer
                     </span>
                   )}
                 </p>
