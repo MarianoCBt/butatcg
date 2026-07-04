@@ -22,7 +22,7 @@ const CONDICIONES = [
 ]
 
 // Zona del cuadro guía, como fracción del video (el código va ahí adentro).
-const GUIA = { x: 0.125, y: 0.42, w: 0.75, h: 0.16 }
+const GUIA = { x: 0.15, y: 0.42, w: 0.7, h: 0.14 }
 
 // Si un código falló hace menos de esto, no se re-consulta (evita spamear
 // la API con la misma lectura errónea en cada frame).
@@ -84,6 +84,8 @@ export default function Escaner() {
   const loopRef = useRef(false) // el loop de OCR sigue vivo
   const pausadoRef = useRef(false) // pausa mientras hay carta pendiente
   const canvasRef = useRef(null)
+  const debugRef = useRef(null) // canvas visible con la imagen procesada
+  const pasadaRef = useRef(0) // alterna el modo de preprocesado
   const fallidosRef = useRef(new Map()) // codigo -> timestamp del último fallo
   const avisoTimer = useRef(null)
 
@@ -177,10 +179,11 @@ export default function Escaner() {
       .catch(() => {})
   }
 
-  // Recorta la zona del cuadro guía y la binariza (blanco y negro) para
-  // que el OCR lea mejor. Si el texto es claro sobre fondo oscuro, se
-  // invierte solo.
-  function capturarZona() {
+  // Recorta la zona del cuadro guía y la prepara para el OCR.
+  // modo 'bin': umbral adaptativo local (robusto a luz despareja, foils);
+  // modo 'gris': escala de grises con contraste estirado.
+  // Se alternan los modos entre pasadas: lo que uno pierde, el otro lo lee.
+  function capturarZona(modo) {
     const video = videoRef.current
     if (!video || !video.videoWidth) return null
     const sx = video.videoWidth * GUIA.x
@@ -197,50 +200,97 @@ export default function Escaner() {
 
     const img = ctx.getImageData(0, 0, canvas.width, canvas.height)
     const d = img.data
-    // Escala de grises + histograma para umbral de Otsu.
+    const w = canvas.width
+    const h = canvas.height
+    const n = w * h
+    const gris = new Uint8ClampedArray(n)
     const histo = new Array(256).fill(0)
-    for (let i = 0; i < d.length; i += 4) {
-      const g = Math.round(d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114)
-      d[i] = g
+    for (let i = 0; i < n; i++) {
+      const g = Math.round(
+        d[i * 4] * 0.299 + d[i * 4 + 1] * 0.587 + d[i * 4 + 2] * 0.114,
+      )
+      gris[i] = g
       histo[g]++
     }
-    const total = d.length / 4
-    let suma = 0
-    for (let t = 0; t < 256; t++) suma += t * histo[t]
-    let sumaFondo = 0
-    let pesoFondo = 0
-    let maxVarianza = 0
-    let umbral = 127
-    for (let t = 0; t < 256; t++) {
-      pesoFondo += histo[t]
-      if (pesoFondo === 0) continue
-      const pesoFrente = total - pesoFondo
-      if (pesoFrente === 0) break
-      sumaFondo += t * histo[t]
-      const mediaFondo = sumaFondo / pesoFondo
-      const mediaFrente = (suma - sumaFondo) / pesoFrente
-      const varianza =
-        pesoFondo * pesoFrente * (mediaFondo - mediaFrente) ** 2
-      if (varianza > maxVarianza) {
-        maxVarianza = varianza
-        umbral = t
+
+    if (modo === 'gris') {
+      // Contraste estirado entre los percentiles 2 y 98.
+      let low = 0
+      let acc = 0
+      for (let t = 0; t < 256; t++) {
+        acc += histo[t]
+        if (acc >= n * 0.02) {
+          low = t
+          break
+        }
       }
-    }
-    // Binariza; si quedó mayoría oscura, invierte (tesseract espera
-    // texto oscuro sobre fondo claro).
-    let oscuros = 0
-    for (let i = 0; i < d.length; i += 4) {
-      const v = d[i] > umbral ? 255 : 0
-      if (v === 0) oscuros++
-      d[i] = d[i + 1] = d[i + 2] = v
-    }
-    if (oscuros > total / 2) {
-      for (let i = 0; i < d.length; i += 4) {
-        const v = 255 - d[i]
-        d[i] = d[i + 1] = d[i + 2] = v
+      let high = 255
+      acc = 0
+      for (let t = 255; t >= 0; t--) {
+        acc += histo[t]
+        if (acc >= n * 0.02) {
+          high = t
+          break
+        }
+      }
+      const rango = Math.max(1, high - low)
+      for (let i = 0; i < n; i++) {
+        const v = ((gris[i] - low) / rango) * 255
+        d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = v
+      }
+    } else {
+      // Umbral adaptativo: cada píxel se compara con la media de su
+      // vecindario (imagen integral para que sea rápido).
+      const iw = w + 1
+      const integ = new Float64Array(iw * (h + 1))
+      for (let y = 0; y < h; y++) {
+        let fila = 0
+        for (let x = 0; x < w; x++) {
+          fila += gris[y * w + x]
+          integ[(y + 1) * iw + x + 1] = integ[y * iw + x + 1] + fila
+        }
+      }
+      const mitad = Math.max(8, Math.round(h / 3))
+      const C = 10 // margen: qué tan más oscuro que la media debe ser el trazo
+      let oscuros = 0
+      for (let y = 0; y < h; y++) {
+        const y0 = Math.max(0, y - mitad)
+        const y1 = Math.min(h - 1, y + mitad)
+        for (let x = 0; x < w; x++) {
+          const x0 = Math.max(0, x - mitad)
+          const x1 = Math.min(w - 1, x + mitad)
+          const area = (x1 - x0 + 1) * (y1 - y0 + 1)
+          const suma =
+            integ[(y1 + 1) * iw + x1 + 1] -
+            integ[(y1 + 1) * iw + x0] -
+            integ[y0 * iw + x1 + 1] +
+            integ[y0 * iw + x0]
+          const v = gris[y * w + x] * area <= suma - C * area ? 0 : 255
+          if (v === 0) oscuros++
+          d[(y * w + x) * 4] =
+            d[(y * w + x) * 4 + 1] =
+            d[(y * w + x) * 4 + 2] =
+              v
+        }
+      }
+      // Tesseract espera texto oscuro sobre fondo claro: si quedó mayoría
+      // oscura (texto claro sobre carta oscura / foil), se invierte.
+      if (oscuros > n / 2) {
+        for (let i = 0; i < n; i++) {
+          const v = 255 - d[i * 4]
+          d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = v
+        }
       }
     }
     ctx.putImageData(img, 0, 0)
+
+    // Vista de depuración: lo que realmente le llega al OCR.
+    const dbg = debugRef.current
+    if (dbg) {
+      dbg.width = canvas.width
+      dbg.height = canvas.height
+      dbg.getContext('2d').drawImage(canvas, 0, 0)
+    }
     return canvas
   }
 
@@ -248,7 +298,8 @@ export default function Escaner() {
     while (loopRef.current) {
       if (!pausadoRef.current && workerRef.current) {
         try {
-          const canvas = capturarZona()
+          const modo = pasadaRef.current++ % 2 === 0 ? 'bin' : 'gris'
+          const canvas = capturarZona(modo)
           if (canvas) {
             const { data } = await workerRef.current.recognize(canvas)
             const texto = (data?.text || '').replace(/\s+/g, ' ').trim()
@@ -503,9 +554,16 @@ export default function Escaner() {
           </p>
         )}
         {camaraActiva && (
-          <p className="border-t border-[var(--color-border)] px-4 py-2 font-mono text-xs text-[var(--color-faint)]">
-            Leyendo: {lectura || '…'}
-          </p>
+          <div className="border-t border-[var(--color-border)] px-4 py-2">
+            <p className="font-mono text-xs text-[var(--color-faint)]">
+              Leyendo: {lectura || '…'}
+            </p>
+            {/* Imagen procesada que le llega al OCR (para diagnosticar) */}
+            <canvas
+              ref={debugRef}
+              className="mt-2 block w-full rounded-md bg-[var(--color-surface-2)]"
+            />
+          </div>
         )}
       </section>
 
