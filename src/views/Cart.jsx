@@ -130,7 +130,9 @@ export default function Cart({ onSeguirComprando }) {
         ))}
 
         <button
-          onClick={clearCart}
+          onClick={() => {
+            if (confirm('¿Vaciar todo el carrito?')) clearCart()
+          }}
           className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-sm font-medium text-[var(--color-muted)] transition hover:border-red-400 hover:bg-red-500/10 hover:text-red-400"
         >
           🗑 Vaciar carrito

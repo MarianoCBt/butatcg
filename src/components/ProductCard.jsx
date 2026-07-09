@@ -1,35 +1,26 @@
+import { useState } from 'react'
 import { useStore } from '../store/StoreContext'
 import { formatMoney } from '../utils/format'
-
-// Color de la rareza según el tipo (usa tokens definidos en index.css)
-function rarezaColor(rareza) {
-  const r = (rareza || '').toLowerCase()
-  if (r.includes('starlight')) return 'var(--rar-starlight)'
-  if (r.includes('secret')) return 'var(--rar-secret)'
-  if (r.includes('ultra')) return 'var(--rar-ultra)'
-  if (r.includes('super')) return 'var(--rar-super)'
-  if (r.includes('common')) return 'var(--rar-common)'
-  return null
-}
+import { rarezaColor, etiquetaDe } from '../utils/producto'
+import ProductModal from './ProductModal'
 
 export default function ProductCard({ product }) {
   const { addToCart, setCartQty, cart } = useStore()
+  const [verDetalle, setVerDetalle] = useState(false)
   const inCart = cart[product.id] || 0
   const agotado = product.stock <= 0
   const sinMas = inCart >= product.stock
-
-  // Etiqueta: preventa tiene prioridad sobre pedido; si no, nada.
-  const etiqueta = product.preventa
-    ? { texto: 'Preventa', color: 'var(--color-brand)' }
-    : product.pedido
-      ? { texto: 'Pedido', color: 'var(--color-pedido)' }
-      : null
-
+  const etiqueta = etiquetaDe(product)
   const rarColor = rarezaColor(product.rareza)
 
   return (
     <div className="flex flex-col overflow-hidden rounded-b-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-sm transition hover:-translate-y-0.5 hover:border-[var(--color-brand)] hover:shadow-md">
-      <div className="relative flex aspect-[3/4] items-center justify-center bg-[var(--color-surface-2)]">
+      {/* Imagen (abre la vista ampliada) */}
+      <button
+        onClick={() => setVerDetalle(true)}
+        aria-label={`Ver ${product.nombre} en grande`}
+        className="relative flex aspect-[3/4] w-full cursor-zoom-in items-center justify-center bg-[var(--color-surface-2)]"
+      >
         {product.imagen ? (
           <img
             src={product.imagen}
@@ -52,13 +43,13 @@ export default function ProductCard({ product }) {
           </span>
         )}
         {agotado && (
-          <div className="absolute inset-0 flex items-center justify-center bg-[var(--color-bg)]/55 backdrop-blur-[1px]">
+          <span className="absolute inset-0 flex items-center justify-center bg-[var(--color-bg)]/55 backdrop-blur-[1px]">
             <span className="-rotate-6 rounded-md bg-red-600 px-4 py-1.5 text-sm font-extrabold uppercase tracking-[0.18em] text-white shadow-lg ring-1 ring-white/20">
               Sin stock
             </span>
-          </div>
+          </span>
         )}
-      </div>
+      </button>
 
       <div className="flex flex-1 flex-col gap-1 p-3">
         <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-[var(--color-ink)]">
@@ -126,6 +117,10 @@ export default function ProductCard({ product }) {
           )}
         </div>
       </div>
+
+      {verDetalle && (
+        <ProductModal product={product} onClose={() => setVerDetalle(false)} />
+      )}
     </div>
   )
 }
