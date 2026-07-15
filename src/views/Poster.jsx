@@ -318,11 +318,20 @@ export default function Poster() {
         ctx.font = F(800, pxTitulo)
       }
       textoConTrazo(titulo, W / 2, 160, pxTitulo)
-      if (fecha) textoConTrazo(fecha, W / 2, 228, 42, 8)
-      if (jugador) textoConTrazo(`👑 ${jugador}`, W / 2, 322, 72)
+      if (fecha) textoConTrazo(fecha, W / 2, 224, 42, 8)
+      if (jugador) {
+        // Nombre centrado de verdad; la corona va aparte, arriba de la
+        // primera letra (así no corre el nombre del centro).
+        ctx.font = F(800, 72)
+        const anchoNombre = ctx.measureText(jugador).width
+        const anchoInicial = ctx.measureText(jugador[0]).width
+        textoConTrazo(jugador, W / 2, 330, 72)
+        ctx.font = '42px "Funnel Sans", system-ui, sans-serif'
+        ctx.fillText('👑', W / 2 - anchoNombre / 2 + anchoInicial / 2, 272)
+      }
       if (resultado) {
-        if ('letterSpacing' in ctx) ctx.letterSpacing = '10px'
-        textoConTrazo(resultado.toUpperCase(), W / 2, 384, 40, 8)
+        if ('letterSpacing' in ctx) ctx.letterSpacing = '12px'
+        textoConTrazo(resultado.toUpperCase(), W / 2, 398, 54, 10)
         if ('letterSpacing' in ctx) ctx.letterSpacing = '0px'
       }
 
