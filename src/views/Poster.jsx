@@ -363,13 +363,13 @@ export default function Poster() {
         const filas = Math.ceil(ids.length / porFila)
         ctx.textAlign = 'left'
         ctx.fillStyle = '#fff'
-        ctx.font = F(300, 28)
-        ctx.fillText(etiqueta, x + 2, y + 26)
+        ctx.font = F(300, 34)
+        ctx.fillText(etiqueta, x + 2, y + 34)
         if (etiquetaDer) {
           ctx.textAlign = 'right'
-          ctx.fillText(etiquetaDer, x + IZQ_W - 2, y + 26)
+          ctx.fillText(etiquetaDer, x + IZQ_W - 2, y + 34)
         }
-        y += 34
+        y += 56
         const altoGrilla = filas * (cardH + gap) - gap
         panel(x - 12, y - 12, IZQ_W + 24, altoGrilla + 24)
         ids.forEach((id, i) => {
@@ -381,20 +381,22 @@ export default function Poster() {
             cardH,
           )
         })
-        return y + altoGrilla + 20
+        return y + altoGrilla + 40
       }
 
       // --- grillas del mazo ---
-      // Apretado para que el side termine antes del logo de Yu-Gi-Oh!
-      // (la capa logo-yugioh.png ocupa y≈1424-1536).
-      const deckTop = 390
+      // Main de 11 por fila (4 filas para 40-44 cartas). Con estas
+      // medidas, el side termina en y=1360: mismo aire (64px) entre el
+      // side y el logo de Yu-Gi-Oh! (y=1424-1536) que entre el logo y
+      // el borde inferior.
+      const deckTop = 410
       let y = deckTop
       const etiquetaStats = stats
         ? `Monster: ${stats.monster}   Spell: ${stats.spell}   Trap: ${stats.trap}`
         : ''
-      y = seccion(deck.main, M, y, 10, 93, `Main Deck: ${deck.main.length}`, etiquetaStats)
-      y = seccion(deck.extra, M, y, 15, 54, `Extra Deck: ${deck.extra.length}`)
-      y = seccion(deck.side, M, y, 15, 54, `Side Deck: ${deck.side.length}`)
+      y = seccion(deck.main, M, y, 11, 87, `Main Deck: ${deck.main.length}`, etiquetaStats)
+      y = seccion(deck.extra, M, y, 15, 58, `Extra Deck: ${deck.extra.length}`)
+      y = seccion(deck.side, M, y, 15, 58, `Side Deck: ${deck.side.length}`)
 
       // --- carta destacada (columna derecha) ---
       const fx = M + IZQ_W + 40
