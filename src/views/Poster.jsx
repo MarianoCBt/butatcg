@@ -319,20 +319,55 @@ export default function Poster() {
       }
       textoConTrazo(titulo, W / 2, 160, pxTitulo)
       if (fecha) textoConTrazo(fecha, W / 2, 224, 42, 8)
-      if (jugador) {
-        // Nombre centrado de verdad; la corona va aparte, arriba de la
-        // primera letra (así no corre el nombre del centro).
-        ctx.font = F(800, 72)
-        const anchoNombre = ctx.measureText(jugador).width
-        const anchoInicial = ctx.measureText(jugador[0]).width
-        textoConTrazo(jugador, W / 2, 330, 72)
-        ctx.font = '42px "Funnel Sans", system-ui, sans-serif'
-        ctx.fillText('👑', W / 2 - anchoNombre / 2 + anchoInicial / 2, 272)
-      }
+      if (jugador) textoConTrazo(jugador, W / 2, 330, 72)
       if (resultado) {
+        // El resultado va en dorado con brillo y líneas de campeonato a
+        // los costados: es lo que marca al campeón.
+        const texto = resultado.toUpperCase()
+        const yRes = 398
+        ctx.font = F(800, 54)
         if ('letterSpacing' in ctx) ctx.letterSpacing = '12px'
-        textoConTrazo(resultado.toUpperCase(), W / 2, 398, 54, 10)
+        const anchoRes = ctx.measureText(texto).width
+        ctx.lineJoin = 'round'
+        ctx.miterLimit = 2
+        ctx.lineWidth = 10
+        ctx.strokeStyle = '#000'
+        ctx.strokeText(texto, W / 2, yRes)
+        const oro = ctx.createLinearGradient(0, yRes - 44, 0, yRes + 8)
+        oro.addColorStop(0, '#ffe9a8')
+        oro.addColorStop(0.45, '#f7c94b')
+        oro.addColorStop(1, '#c98f1b')
+        ctx.save()
+        ctx.shadowColor = 'rgba(247, 201, 75, 0.45)'
+        ctx.shadowBlur = 26
+        ctx.fillStyle = oro
+        ctx.fillText(texto, W / 2, yRes)
+        ctx.restore()
         if ('letterSpacing' in ctx) ctx.letterSpacing = '0px'
+        // Líneas doradas con un diamante en la punta interna.
+        const yLinea = yRes - 19
+        for (const dir of [-1, 1]) {
+          const inicio = W / 2 + dir * (anchoRes / 2 + 44)
+          const fin = W / 2 + dir * (anchoRes / 2 + 170)
+          ctx.save()
+          ctx.shadowColor = 'rgba(0, 0, 0, 0.8)'
+          ctx.shadowBlur = 6
+          ctx.strokeStyle = '#f7c94b'
+          ctx.lineWidth = 4
+          ctx.beginPath()
+          ctx.moveTo(inicio, yLinea)
+          ctx.lineTo(fin, yLinea)
+          ctx.stroke()
+          ctx.fillStyle = '#ffe9a8'
+          ctx.beginPath()
+          ctx.moveTo(inicio, yLinea - 9)
+          ctx.lineTo(inicio + 9, yLinea)
+          ctx.lineTo(inicio, yLinea + 9)
+          ctx.lineTo(inicio - 9, yLinea)
+          ctx.closePath()
+          ctx.fill()
+          ctx.restore()
+        }
       }
 
       // --- helpers de la grilla ---
