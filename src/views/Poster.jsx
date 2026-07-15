@@ -320,7 +320,7 @@ export default function Poster() {
       textoConTrazo(titulo, W / 2, 160, pxTitulo)
       if (fecha) textoConTrazo(fecha, W / 2, 224, 42, 8)
       // El nombre queda centrado verticalmente entre la fecha y el resultado.
-      if (jugador) textoConTrazo(jugador, W / 2, 314, 72)
+      if (jugador) textoConTrazo(jugador, W / 2, 300, 72)
       if (resultado) {
         // El resultado va en dorado con brillo y líneas de campeonato a
         // los costados: es lo que marca al campeón.
