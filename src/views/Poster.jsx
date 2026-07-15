@@ -319,12 +319,13 @@ export default function Poster() {
       }
       textoConTrazo(titulo, W / 2, 160, pxTitulo)
       if (fecha) textoConTrazo(fecha, W / 2, 224, 42, 8)
-      if (jugador) textoConTrazo(jugador, W / 2, 330, 72)
+      // El nombre queda centrado verticalmente entre la fecha y el resultado.
+      if (jugador) textoConTrazo(jugador, W / 2, 314, 72)
       if (resultado) {
         // El resultado va en dorado con brillo y líneas de campeonato a
         // los costados: es lo que marca al campeón.
         const texto = resultado.toUpperCase()
-        const yRes = 398
+        const yRes = 380
         ctx.font = F(800, 54)
         if ('letterSpacing' in ctx) ctx.letterSpacing = '12px'
         const anchoRes = ctx.measureText(texto).width
@@ -344,7 +345,7 @@ export default function Poster() {
         ctx.fillText(texto, W / 2, yRes)
         ctx.restore()
         if ('letterSpacing' in ctx) ctx.letterSpacing = '0px'
-        // Líneas doradas con un diamante en la punta interna.
+        // Líneas doradas a los costados.
         const yLinea = yRes - 19
         for (const dir of [-1, 1]) {
           const inicio = W / 2 + dir * (anchoRes / 2 + 44)
@@ -358,14 +359,6 @@ export default function Poster() {
           ctx.moveTo(inicio, yLinea)
           ctx.lineTo(fin, yLinea)
           ctx.stroke()
-          ctx.fillStyle = '#ffe9a8'
-          ctx.beginPath()
-          ctx.moveTo(inicio, yLinea - 9)
-          ctx.lineTo(inicio + 9, yLinea)
-          ctx.lineTo(inicio, yLinea + 9)
-          ctx.lineTo(inicio - 9, yLinea)
-          ctx.closePath()
-          ctx.fill()
           ctx.restore()
         }
       }
