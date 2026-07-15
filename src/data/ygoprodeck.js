@@ -213,6 +213,53 @@ export async function buscarPorCodigo(codigoCrudo) {
 }
 
 // ---------------------------------------------------------------------
+//  Búsqueda por PASSCODE (los números de un archivo .ydk).
+//  Usada por el generador de pósters (vista oculta #poster).
+// ---------------------------------------------------------------------
+
+/**
+ * Busca varias cartas por passcode en un solo pedido. Devuelve un Map
+ * `id -> { id, nombre, tipo }` que también indexa los ids de los artes
+ * alternativos (`card_images`), porque los .ydk pueden usar cualquiera.
+ */
+export async function buscarPorIds(idsCrudos) {
+  const ids = [
+    ...new Set(
+      (idsCrudos || [])
+        .map(Number)
+        .filter((n) => Number.isFinite(n) && n > 0),
+    ),
+  ]
+  const porId = new Map()
+  const registrar = (c) => {
+    const info = { id: c.id, nombre: c.name || '', tipo: c.type || '' }
+    porId.set(c.id, info)
+    for (const img of c.card_images || []) porId.set(img.id, info)
+  }
+  const pedir = async (lote) => {
+    const data = await fetchJson(`${CARDINFO_API}?id=${lote.join(',')}`)
+    if (!data?.data) return false
+    data.data.forEach(registrar)
+    return true
+  }
+
+  // Un solo pedido con todos los ids. Si alguno no existe la API rechaza
+  // el lote entero, así que en ese caso se piden de a uno (en tandas) y
+  // se ignoran los que fallen.
+  if (!(await pedir(ids))) {
+    for (let i = 0; i < ids.length; i += 8) {
+      await Promise.all(
+        ids
+          .slice(i, i + 8)
+          .filter((id) => !porId.has(id))
+          .map((id) => pedir([id])),
+      )
+    }
+  }
+  return porId
+}
+
+// ---------------------------------------------------------------------
 //  Búsqueda por NOMBRE (el texto grande de la carta: mucho más legible
 //  para el OCR que el código). Devuelve la carta con TODAS sus
 //  impresiones (card_sets) para elegir la versión en un desplegable.

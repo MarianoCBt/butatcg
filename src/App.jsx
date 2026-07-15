@@ -67,9 +67,11 @@ function Shell() {
   )
 }
 
-// Herramienta privada del dueño (no aparece en el menú): se abre con #escaner.
-// Va con lazy() para que el visitante común no descargue nada del escáner.
+// Herramientas privadas del dueño (no aparecen en el menú): se abren con
+// #escaner y #poster. Van con lazy() para que el visitante común no las
+// descargue.
 const Escaner = lazy(() => import('./views/Escaner'))
+const Poster = lazy(() => import('./views/Poster'))
 
 function useHash() {
   const [hash, setHash] = useState(() => window.location.hash)
@@ -84,16 +86,16 @@ function useHash() {
 export default function App() {
   const hash = useHash()
 
-  if (hash === '#escaner') {
+  if (hash === '#escaner' || hash === '#poster') {
     return (
       <Suspense
         fallback={
           <p className="p-6 text-center text-sm text-[var(--color-muted)]">
-            Cargando escáner…
+            Cargando…
           </p>
         }
       >
-        <Escaner />
+        {hash === '#escaner' ? <Escaner /> : <Poster />}
       </Suspense>
     )
   }
