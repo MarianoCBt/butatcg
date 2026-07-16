@@ -149,11 +149,15 @@ export default function Catalog({ filter, setFilter }) {
             </span>
           )}
         </div>
-        {!loading && filtered.length > 0 && (
-          <span className="shrink-0 text-xs text-[var(--color-faint)]">
-            {filtered.length} {filtered.length === 1 ? 'producto' : 'productos'}
-          </span>
-        )}
+        <div className="flex shrink-0 items-center gap-3">
+          {!loading && filtered.length > 0 && (
+            <span className="text-xs text-[var(--color-faint)]">
+              {filtered.length}{' '}
+              {filtered.length === 1 ? 'producto' : 'productos'}
+            </span>
+          )}
+          <BotonCompartir />
+        </div>
       </div>
 
       {/* Grilla / estados */}
@@ -187,6 +191,36 @@ function describeFilter(f) {
   if (f.preventa) return 'Preventa'
   if (f.subtipo) return `Accesorios · ${f.subtipo}`
   return null
+}
+
+// Copia al portapapeles el link de la vista actual (el filtro va en el hash).
+function BotonCompartir() {
+  const [copiado, setCopiado] = useState(false)
+
+  function copiar() {
+    navigator.clipboard
+      .writeText(window.location.href)
+      .then(() => {
+        setCopiado(true)
+        setTimeout(() => setCopiado(false), 1800)
+      })
+      .catch(() => {})
+  }
+
+  return (
+    <button
+      onClick={copiar}
+      title="Copiar el link de esta vista para compartir"
+      className={
+        'rounded-full border px-3 py-1 text-xs font-medium transition ' +
+        (copiado
+          ? 'border-[var(--color-brand)] bg-[var(--color-brand-light)] text-[var(--color-brand)]'
+          : 'border-[var(--color-border)] text-[var(--color-muted)] hover:border-[var(--color-brand)] hover:text-[var(--color-brand)]')
+      }
+    >
+      {copiado ? '¡Link copiado!' : '🔗 Compartir'}
+    </button>
+  )
 }
 
 // Tarjeta "fantasma" mientras carga el stock (animación solo de opacidad)

@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useRef, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { StoreProvider, useStore } from './store/StoreContext'
 import Header from './components/Header'
 import Banner from './components/Banner'
@@ -13,40 +13,95 @@ const EMPTY_FILTER = {
   preventa: false,
 }
 
-function Shell() {
+// ---------------------------------------------------------------------
+//  Deep links: el filtro activo vive en el hash de la URL, así se pueden
+//  compartir links que abren el catálogo ya filtrado. Rutas:
+//    #inicio (o vacío)     -> última preventa (portada)
+//    #todos                -> todo el catálogo
+//    #cartas / #sellados   -> por categoría
+//    #accesorios[/Tipo]    -> accesorios (opcionalmente un subtipo)
+//    #preventa[/Expansión] -> preventas (opcionalmente una expansión)
+//    #set/Expansión        -> un set puntual
+//    #carrito              -> el carrito
+// ---------------------------------------------------------------------
+function parseHash(hash, ultimaPreventa) {
+  const inicio = {
+    view: 'catalogo',
+    filter: ultimaPreventa
+      ? { ...EMPTY_FILTER, preventa: true, expansion: ultimaPreventa }
+      : EMPTY_FILTER,
+  }
+  if (!hash || hash === '#' || hash === '#inicio') return inicio
+  if (hash === '#carrito') return { view: 'carrito', filter: EMPTY_FILTER }
+
+  const [ruta, arg] = hash.slice(1).split('/')
+  const valor = arg ? decodeURIComponent(arg) : null
+  switch (ruta) {
+    case 'todos':
+      return { view: 'catalogo', filter: { ...EMPTY_FILTER } }
+    case 'cartas':
+      return { view: 'catalogo', filter: { ...EMPTY_FILTER, categoria: 'carta' } }
+    case 'sellados':
+      return { view: 'catalogo', filter: { ...EMPTY_FILTER, categoria: 'sellado' } }
+    case 'accesorios':
+      return {
+        view: 'catalogo',
+        filter: { ...EMPTY_FILTER, categoria: 'accesorio', subtipo: valor },
+      }
+    case 'preventa':
+      return {
+        view: 'catalogo',
+        filter: { ...EMPTY_FILTER, preventa: true, expansion: valor },
+      }
+    case 'set':
+      return valor
+        ? { view: 'catalogo', filter: { ...EMPTY_FILTER, expansion: valor } }
+        : inicio
+    default:
+      return inicio
+  }
+}
+
+function filterToHash(f) {
+  if (f.preventa)
+    return f.expansion
+      ? `#preventa/${encodeURIComponent(f.expansion)}`
+      : '#preventa'
+  if (f.expansion) return `#set/${encodeURIComponent(f.expansion)}`
+  if (f.subtipo) return `#accesorios/${encodeURIComponent(f.subtipo)}`
+  if (f.categoria === 'accesorio') return '#accesorios'
+  if (f.categoria === 'carta') return '#cartas'
+  if (f.categoria === 'sellado') return '#sellados'
+  return '#todos'
+}
+
+function Shell({ hash }) {
   const { expansiones } = useStore()
-  const [view, setView] = useState('catalogo')
-  const [filter, setFilter] = useState(EMPTY_FILTER)
-  const inicializado = useRef(false)
 
   // La última preventa agregada = la última expansión en preventa de la lista.
   const ultimaPreventa = expansiones[expansiones.length - 1] || null
 
-  // Al cargar (cuando ya hay expansiones), mostrar la última preventa por defecto.
-  useEffect(() => {
-    if (!inicializado.current && ultimaPreventa) {
-      inicializado.current = true
-      setFilter({ ...EMPTY_FILTER, preventa: true, expansion: ultimaPreventa })
-    }
-  }, [ultimaPreventa])
+  // El hash es la única fuente de verdad de vista + filtro.
+  const { view, filter } = useMemo(
+    () => parseHash(hash, ultimaPreventa),
+    [hash, ultimaPreventa],
+  )
 
   // Al cambiar de vista, volver arriba (si no, el carrito abre "scrolleado").
   useEffect(() => {
     window.scrollTo(0, 0)
   }, [view])
 
-  function irAInicio() {
-    setFilter(
-      ultimaPreventa
-        ? { ...EMPTY_FILTER, preventa: true, expansion: ultimaPreventa }
-        : EMPTY_FILTER,
-    )
-    setView('catalogo')
+  const navegar = (h) => {
+    window.location.hash = h
   }
-
-  function applyFilter(partial) {
-    setFilter({ ...EMPTY_FILTER, ...partial })
-    setView('catalogo')
+  const irAInicio = () => navegar('#inicio')
+  const applyFilter = (partial) =>
+    navegar(filterToHash({ ...EMPTY_FILTER, ...partial }))
+  const setFilter = (f) => navegar(filterToHash(f))
+  const setView = (v) => {
+    if (v === 'carrito') navegar('#carrito')
+    // 'catalogo' no hace nada: applyFilter/irAInicio ya fijan el hash.
   }
 
   return (
@@ -102,7 +157,7 @@ export default function App() {
 
   return (
     <StoreProvider>
-      <Shell />
+      <Shell hash={hash} />
     </StoreProvider>
   )
 }
