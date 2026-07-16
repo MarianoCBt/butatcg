@@ -145,11 +145,12 @@ export function StoreProvider({ children }) {
     [cartItems],
   )
 
-  // Expansiones distintas entre los productos en preventa
+  // Expansiones distintas entre los productos en preventa o a pedido
+  // (el menú/links de "Preventa" incluyen ambos).
   const expansiones = useMemo(() => {
     const set = new Set()
     products.forEach((p) => {
-      if (p.preventa && p.expansion) set.add(p.expansion)
+      if ((p.preventa || p.pedido) && p.expansion) set.add(p.expansion)
     })
     return [...set]
   }, [products])

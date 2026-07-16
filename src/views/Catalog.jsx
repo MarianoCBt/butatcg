@@ -20,7 +20,8 @@ export default function Catalog({ filter, setFilter }) {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     const lista = products.filter((p) => {
-      if (filter.preventa && !p.preventa) return false
+      // El filtro "Preventa" incluye también los productos a pedido.
+      if (filter.preventa && !p.preventa && !p.pedido) return false
       if (filter.expansion && p.expansion !== filter.expansion) return false
       if (filter.subtipo && p.subtipo !== filter.subtipo) return false
       if (filter.categoria !== 'todos' && p.categoria !== filter.categoria)
