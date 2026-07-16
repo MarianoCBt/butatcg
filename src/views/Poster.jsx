@@ -8,7 +8,7 @@ import { buscarPorIds } from '../data/ygoprodeck'
 //  "ganador de torneo" (título, jugador, grilla del mazo y carta
 //  destacada) listo para descargar como PNG y publicar en redes.
 //
-//  Assets del póster (en public/poster/): fondos elegibles (fondo-N.png)
+//  Assets del póster (en public/poster/): fondos elegibles (fondo-N.jpg)
 //  y dos capas ya posicionadas sobre el mismo lienzo que los fondos:
 //  logo-buta.png (jabalí) y logo-yugioh.png. Si faltan, se dibuja un
 //  fondo de reemplazo y se omiten los logos.
@@ -17,6 +17,7 @@ import { buscarPorIds } from '../data/ygoprodeck'
 // =====================================================================
 
 const LS_DATOS = 'buta.poster.datos'
+const LS_MAZO = 'buta.poster.mazo'
 
 const RESULTADOS = ['GANADOR', 'FINALISTA', 'TOP 4', 'TOP 8', 'TOP 16']
 
@@ -24,7 +25,7 @@ const RESULTADOS = ['GANADOR', 'FINALISTA', 'TOP 4', 'TOP 8', 'TOP 16']
 const W = 1600
 const H = 1600
 const M = 70 // margen exterior
-const IZQ_W = 1000 // ancho de la columna del mazo (10 cartas por fila)
+const IZQ_W = 1000 // ancho de la columna del mazo
 
 const ASSETS = import.meta.env.BASE_URL + 'poster/'
 const FONDOS = ['fondo-1.jpg', 'fondo-2.jpg', 'fondo-3.jpg']
@@ -117,6 +118,7 @@ export default function Poster() {
   const imagenesRef = useRef(new Map()) // url -> Promise<Image|null>
   const dibujoTokenRef = useRef(0)
   const avisoTimer = useRef(null)
+  const usuarioCargoRef = useRef(false) // el usuario ya cargó un mazo a mano
 
   useEffect(() => {
     localStorage.setItem(
@@ -135,6 +137,47 @@ export default function Poster() {
     return () => link.remove()
   }, [])
 
+  // Al abrir la vista se restaura el último mazo usado (los nombres de
+  // las cartas se piden de nuevo a la API; los ids viven en localStorage).
+  useEffect(() => {
+    let vivo = true
+    try {
+      const g = JSON.parse(localStorage.getItem(LS_MAZO) || 'null')
+      if (!g?.deck?.main) return
+      ;(async () => {
+        setCargando(true)
+        try {
+          const mapa = await buscarPorIds([
+            ...g.deck.main,
+            ...g.deck.extra,
+            ...g.deck.side,
+          ])
+          if (!vivo || usuarioCargoRef.current) return
+          setDeck(g.deck)
+          setCartas(mapa)
+          setNombreArchivo(g.nombreArchivo || '')
+          setDestacadaId(g.destacadaId || String(g.deck.main[0] ?? ''))
+        } finally {
+          if (vivo && !usuarioCargoRef.current) setCargando(false)
+        }
+      })()
+    } catch {
+      // datos guardados corruptos: se ignoran
+    }
+    return () => {
+      vivo = false
+    }
+  }, [])
+
+  // Guardar el mazo actual para la próxima visita.
+  useEffect(() => {
+    if (!deck) return
+    localStorage.setItem(
+      LS_MAZO,
+      JSON.stringify({ deck, nombreArchivo, destacadaId }),
+    )
+  }, [deck, nombreArchivo, destacadaId])
+
   function avisar(texto) {
     setAviso(texto)
     clearTimeout(avisoTimer.current)
@@ -144,6 +187,7 @@ export default function Poster() {
   // ---- carga del .ydk ------------------------------------------------
 
   async function cargarTexto(texto, nombre) {
+    usuarioCargoRef.current = true
     setError('')
     setCargando(true)
     try {
@@ -422,16 +466,22 @@ export default function Poster() {
       }
 
       // --- grillas del mazo ---
-      // Main de 11 por fila (4 filas para 40-44 cartas). Con estas
-      // medidas, el side termina en y=1360: mismo aire (64px) entre el
-      // side y el logo de Yu-Gi-Oh! (y=1424-1536) que entre el logo y
-      // el borde inferior.
+      // El main va SIEMPRE en 4 filas: 11 por fila hasta 44 cartas y,
+      // para mazos más grandes, más cartas por fila (más chicas). Así el
+      // side termina siempre en y=1360: mismo aire (64px) entre el side
+      // y el logo de Yu-Gi-Oh! (y=1424-1536) que entre el logo y el
+      // borde inferior.
       const deckTop = 410
       let y = deckTop
       const etiquetaStats = stats
         ? `Monster: ${stats.monster}   Spell: ${stats.spell}   Trap: ${stats.trap}`
         : ''
-      y = seccion(deck.main, M, y, 11, 87, `Main Deck: ${deck.main.length}`, etiquetaStats)
+      const porFilaMain = Math.max(11, Math.ceil(deck.main.length / 4))
+      const cardWMain = Math.floor((IZQ_W - (porFilaMain - 1) * 4) / porFilaMain)
+      y = seccion(
+        deck.main, M, y, porFilaMain, cardWMain,
+        `Main Deck: ${deck.main.length}`, etiquetaStats,
+      )
       y = seccion(deck.extra, M, y, 15, 58, `Extra Deck: ${deck.extra.length}`)
       y = seccion(deck.side, M, y, 15, 58, `Side Deck: ${deck.side.length}`)
 
@@ -490,6 +540,24 @@ export default function Poster() {
       avisar('Imagen copiada al portapapeles.')
     } catch {
       avisar('No se pudo copiar (probá con Descargar PNG).')
+    }
+  }
+
+  // En el teléfono abre el menú de compartir del sistema (Instagram,
+  // WhatsApp, etc.). Donde no exista, cae a descargar el PNG.
+  async function compartir() {
+    try {
+      const blob = await aBlob()
+      const archivo = new File([blob], 'poster.png', { type: 'image/png' })
+      if (navigator.canShare?.({ files: [archivo] })) {
+        await navigator.share({ files: [archivo], title: evento })
+      } else {
+        descargar()
+      }
+    } catch (e) {
+      if (e?.name !== 'AbortError') {
+        avisar('No se pudo compartir (probá con Descargar PNG).')
+      }
     }
   }
 
@@ -701,8 +769,15 @@ export default function Poster() {
                 <div className="mt-3 flex flex-wrap items-center gap-3">
                   <button
                     type="button"
-                    onClick={descargar}
+                    onClick={compartir}
                     className="rounded-lg bg-[var(--color-brand)] px-5 py-2.5 text-sm font-semibold text-white transition-[opacity] hover:bg-[var(--color-brand-dark)]"
+                  >
+                    📤 Compartir
+                  </button>
+                  <button
+                    type="button"
+                    onClick={descargar}
+                    className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-2.5 text-sm font-semibold text-[var(--color-ink)] transition-[opacity] hover:opacity-80"
                   >
                     ⬇️ Descargar PNG
                   </button>
