@@ -32,7 +32,7 @@ export const config = {
   // -------------------------------------------------------------------
   banner: {
     activo: true,
-    imagen: 'https://i.imgur.com/pKBhIjw.png',
+    imagen: 'https://i.imgur.com/RfKB0IQ.png',
     alt: 'Nueva preventa',
   },
 
