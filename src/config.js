@@ -18,7 +18,7 @@ export const config = {
   whatsappNumber: '5491150579543',
 
   // Link externo a la sección de Torneos
-  torneosUrl: 'https://l4gash.github.io/buta-tcg-web/index.html',
+  torneosUrl: 'https://butatcg.com/',
 
   // Instagram de la tienda
   instagramUrl: 'https://www.instagram.com/butatcg/',
