@@ -25,15 +25,18 @@ export const config = {
   instagramUser: '@butatcg',
 
   // -------------------------------------------------------------------
-  //  BANNER decorativo (imagen, arriba de todo). Cambiá la imagen cuando
-  //  salga una preventa nueva. Poné activo: false para ocultarlo.
+  //  BANNER (imagen, arriba de todo). Cambiá la imagen cuando salga una
+  //  preventa nueva. Poné activo: false para ocultarlo.
   //  - imagen: URL de la imagen, o '/archivo.webp' si la subís a public/.
+  //  - expansion: a qué set lleva al tocarlo. Tiene que coincidir EXACTO
+  //    con la columna "expansion" de la planilla. Vacío ('') = última preventa.
   //  Alto del banner: ~96px (celular) / ~128px (tablet) / ~160px (escritorio).
   // -------------------------------------------------------------------
   banner: {
     activo: true,
     imagen: 'https://i.imgur.com/RfKB0IQ.png',
     alt: 'Nueva preventa',
+    expansion: 'Magnificent Monsters',
   },
 
   // -------------------------------------------------------------------

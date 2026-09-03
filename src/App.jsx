@@ -1,5 +1,6 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { StoreProvider, useStore } from './store/StoreContext'
+import { config } from './config'
 import Header from './components/Header'
 import Banner from './components/Banner'
 import Footer from './components/Footer'
@@ -96,6 +97,11 @@ function Shell({ hash }) {
     window.location.hash = h
   }
   const irAInicio = () => navegar('#inicio')
+  // El banner lleva al set de config.banner.expansion; si está vacío, a la portada.
+  const irAlBanner = () => {
+    const exp = config.banner?.expansion
+    navegar(exp ? `#preventa/${encodeURIComponent(exp)}` : '#inicio')
+  }
   const applyFilter = (partial) =>
     navegar(filterToHash({ ...EMPTY_FILTER, ...partial }))
   const setFilter = (f) => navegar(filterToHash(f))
@@ -112,7 +118,7 @@ function Shell({ hash }) {
         applyFilter={applyFilter}
         onInicio={irAInicio}
       />
-      {view === 'catalogo' && <Banner onClick={irAInicio} />}
+      {view === 'catalogo' && <Banner onClick={irAlBanner} />}
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 pb-6 pt-3">
         {view === 'catalogo' && <Catalog filter={filter} setFilter={setFilter} />}
         {view === 'carrito' && <Cart onSeguirComprando={irAInicio} />}
