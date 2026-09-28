@@ -30,13 +30,14 @@ export const config = {
   //  - imagen: URL de la imagen, o '/archivo.webp' si la subís a public/.
   //  - expansion: a qué set lleva al tocarlo. Tiene que coincidir EXACTO
   //    con la columna "expansion" de la planilla. Vacío ('') = última preventa.
-  //  Alto del banner: ~96px (celular) / ~128px (tablet) / ~160px (escritorio).
+  //  Alto del banner: 144px (celular) / 208px (tablet) / 256px (escritorio).
+  //  Imagen ideal: ~1280x320 px (se recorta centrado).
   // -------------------------------------------------------------------
   banner: {
     activo: true,
-    imagen: 'https://i.imgur.com/RfKB0IQ.png',
+    imagen: 'https://i.imgur.com/oCcDpcn.png',
     alt: 'Nueva preventa',
-    expansion: 'Magnificent Monsters',
+    expansion: 'Beyond the Brave',
   },
 
   // -------------------------------------------------------------------
