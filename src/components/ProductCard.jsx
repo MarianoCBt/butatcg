@@ -1,7 +1,12 @@
 import { useState } from 'react'
 import { useStore } from '../store/StoreContext'
 import { formatMoney } from '../utils/format'
-import { rarezaColor, etiquetaDe } from '../utils/producto'
+import {
+  rarezaColor,
+  etiquetaDe,
+  esOverframe,
+  estiloOverframe,
+} from '../utils/producto'
 import ProductModal from './ProductModal'
 
 export default function ProductCard({ product }) {
@@ -12,6 +17,7 @@ export default function ProductCard({ product }) {
   const sinMas = inCart >= product.stock
   const etiqueta = etiquetaDe(product)
   const rarColor = rarezaColor(product.rareza)
+  const overframe = esOverframe(product)
 
   return (
     <div className="flex flex-col overflow-hidden rounded-b-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-sm transition hover:-translate-y-0.5 hover:border-[var(--color-brand)] hover:shadow-md">
@@ -33,6 +39,14 @@ export default function ProductCard({ product }) {
           />
         ) : (
           <span className="px-2 text-center text-4xl opacity-20">🃏</span>
+        )}
+        {overframe && !agotado && (
+          <span
+            className="absolute left-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white shadow ring-1 ring-white/25"
+            style={estiloOverframe}
+          >
+            Overframe
+          </span>
         )}
         {etiqueta && !agotado && (
           <span

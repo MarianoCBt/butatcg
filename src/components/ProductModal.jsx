@@ -2,7 +2,13 @@ import { useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useStore } from '../store/StoreContext'
 import { formatMoney } from '../utils/format'
-import { rarezaColor, etiquetaDe, imagenGrande } from '../utils/producto'
+import {
+  rarezaColor,
+  etiquetaDe,
+  imagenGrande,
+  esOverframe,
+  estiloOverframe,
+} from '../utils/producto'
 
 // Vista ampliada de un producto: imagen grande + detalles + agregar al carrito.
 export default function ProductModal({ product, onClose }) {
@@ -12,6 +18,7 @@ export default function ProductModal({ product, onClose }) {
   const sinMas = inCart >= product.stock
   const etiqueta = etiquetaDe(product)
   const rarColor = rarezaColor(product.rareza)
+  const overframe = esOverframe(product)
 
   // Cerrar con Escape y bloquear el scroll del fondo mientras está abierto.
   useEffect(() => {
@@ -81,6 +88,14 @@ export default function ProductModal({ product, onClose }) {
 
           {/* Badges */}
           <div className="flex flex-wrap items-center gap-2">
+            {overframe && (
+              <span
+                className="rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider text-white ring-1 ring-white/25"
+                style={estiloOverframe}
+              >
+                Overframe
+              </span>
+            )}
             {etiqueta && (
               <span
                 className="rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide text-white"

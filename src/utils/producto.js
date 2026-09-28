@@ -19,6 +19,17 @@ export function etiquetaDe(product) {
   return null
 }
 
+// Las "Extended Art" (arte que desborda el marco) se destacan como OVERFRAME.
+export function esOverframe(product) {
+  return /extended art|overframe/i.test(product?.nombre || '')
+}
+
+// Degradado de la etiqueta OVERFRAME (tokens definidos en index.css).
+export const estiloOverframe = {
+  backgroundImage:
+    'linear-gradient(90deg, var(--color-overframe-from), var(--color-overframe-to))',
+}
+
 // Versión grande de la imagen (YGOPRODeck sirve /cards_small/ y /cards/).
 export function imagenGrande(url) {
   return url ? url.replace('/cards_small/', '/cards/') : url

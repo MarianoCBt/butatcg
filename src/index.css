@@ -17,6 +17,9 @@
   --hero-to: #0c1730;
   /* Etiqueta "Pedido" (preventa usa el azul de marca) */
   --color-pedido: #e08a2e;
+  /* Etiqueta OVERFRAME (cartas Extended Art) */
+  --color-overframe-from: #7b4bff;
+  --color-overframe-to: #c944e0;
   /* Colores por rareza (tema oscuro) */
   --rar-common: #b3bccc;
   --rar-super: #7fc4e8;
