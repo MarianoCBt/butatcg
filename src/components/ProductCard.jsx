@@ -40,20 +40,26 @@ export default function ProductCard({ product }) {
         ) : (
           <span className="px-2 text-center text-4xl opacity-20">🃏</span>
         )}
-        {overframe && !agotado && (
-          <span
-            className="absolute left-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white shadow ring-1 ring-white/25"
-            style={estiloOverframe}
-          >
-            Overframe
-          </span>
-        )}
-        {etiqueta && !agotado && (
-          <span
-            className="absolute bottom-2 left-2 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide text-white shadow"
-            style={{ backgroundColor: etiqueta.color }}
-          >
-            {etiqueta.texto}
+        {/* Etiquetas al pie: preventa/pedido a la izquierda y overframe a la
+            derecha. Si no entran lado a lado, overframe pasa arriba. */}
+        {(etiqueta || overframe) && !agotado && (
+          <span className="absolute inset-x-2 bottom-2 flex flex-wrap-reverse items-start justify-end gap-1">
+            {etiqueta && (
+              <span
+                className="mr-auto rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide text-white shadow"
+                style={{ backgroundColor: etiqueta.color }}
+              >
+                {etiqueta.texto}
+              </span>
+            )}
+            {overframe && (
+              <span
+                className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white shadow ring-1 ring-white/25"
+                style={estiloOverframe}
+              >
+                Overframe
+              </span>
+            )}
           </span>
         )}
         {agotado && (
