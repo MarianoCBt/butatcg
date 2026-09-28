@@ -25,11 +25,11 @@ const EMPTY_FILTER = {
 //    #set/Expansión        -> un set puntual
 //    #carrito              -> el carrito
 // ---------------------------------------------------------------------
-function parseHash(hash, ultimaPreventa) {
+function parseHash(hash, destacada) {
   const inicio = {
     view: 'catalogo',
-    filter: ultimaPreventa
-      ? { ...EMPTY_FILTER, preventa: true, expansion: ultimaPreventa }
+    filter: destacada
+      ? { ...EMPTY_FILTER, preventa: true, expansion: destacada }
       : EMPTY_FILTER,
   }
   if (!hash || hash === '#' || hash === '#inicio') return inicio
@@ -79,13 +79,15 @@ function filterToHash(f) {
 function Shell({ hash }) {
   const { expansiones } = useStore()
 
-  // La última preventa agregada = la última expansión en preventa de la lista.
-  const ultimaPreventa = expansiones[expansiones.length - 1] || null
+  // Set destacado: el de config.banner.expansion (el mismo al que lleva el
+  // banner). Si no está configurado, cae a la última expansión de la lista.
+  const destacada =
+    config.banner?.expansion || expansiones[expansiones.length - 1] || null
 
   // El hash es la única fuente de verdad de vista + filtro.
   const { view, filter } = useMemo(
-    () => parseHash(hash, ultimaPreventa),
-    [hash, ultimaPreventa],
+    () => parseHash(hash, destacada),
+    [hash, destacada],
   )
 
   // Al cambiar de vista, volver arriba (si no, el carrito abre "scrolleado").
