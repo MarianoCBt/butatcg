@@ -14,6 +14,7 @@ export default function Cart({ onSeguirComprando }) {
     clearCart,
   } = useStore()
 
+  const [copiado, setCopiado] = useState(false)
   const [cliente, setCliente] = useState({
     nombre: '',
     entrega: 'retiro',
@@ -41,13 +42,26 @@ export default function Cart({ onSeguirComprando }) {
       lineas.push('')
       lineas.push(`Notas: ${cliente.notas}`)
     }
-    return lineas.join('\n')
+    // CRLF: WhatsApp Escritorio/Web a veces ignora los saltos de línea de un
+    // link wa.me y manda todo en un párrafo; con CRLF los respeta más seguido.
+    // Como respaldo está el botón "Copiar pedido", que nunca pierde el formato.
+    return lineas.join('\r\n')
   }
 
   function enviarWhatsApp() {
     const texto = encodeURIComponent(buildMessage())
     const url = `https://wa.me/${config.whatsappNumber}?text=${texto}`
     window.open(url, '_blank')
+  }
+
+  function copiarPedido() {
+    navigator.clipboard
+      .writeText(buildMessage())
+      .then(() => {
+        setCopiado(true)
+        setTimeout(() => setCopiado(false), 2000)
+      })
+      .catch(() => {})
   }
 
   if (cartItems.length === 0) {
@@ -77,9 +91,9 @@ export default function Cart({ onSeguirComprando }) {
         {cartItems.map((it) => (
           <div
             key={it.id}
-            className="flex items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
+            className="flex gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
           >
-            <div className="flex h-16 w-12 shrink-0 items-center justify-center overflow-hidden rounded bg-[var(--color-surface-2)]">
+            <div className="flex h-20 w-14 shrink-0 items-center justify-center overflow-hidden rounded bg-[var(--color-surface-2)]">
               {it.imagen ? (
                 <img
                   src={it.imagen}
@@ -90,42 +104,55 @@ export default function Cart({ onSeguirComprando }) {
                 <span className="text-xl opacity-30">🃏</span>
               )}
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold">{it.nombre}</p>
-              <p className="text-xs text-[var(--color-faint)]">
-                {formatMoney(it.precio)} c/u
-                {it.set ? ` · ${it.set}` : ''}
-              </p>
+
+            <div className="flex min-w-0 flex-1 flex-col gap-2">
+              {/* Nombre + quitar */}
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="line-clamp-2 text-sm font-semibold leading-snug">
+                    {it.nombre}
+                  </p>
+                  <p className="text-xs text-[var(--color-faint)]">
+                    {formatMoney(it.precio)} c/u
+                    {it.set ? ` · ${it.set}` : ''}
+                  </p>
+                </div>
+                <button
+                  onClick={() => removeFromCart(it.id)}
+                  className="-mr-1 shrink-0 rounded-md px-1.5 py-1 text-[var(--color-faint)] transition hover:bg-red-500/10 hover:text-red-400"
+                  title="Quitar"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Cantidad + subtotal */}
+              <div className="mt-auto flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-1 rounded-lg border border-[var(--color-border)]">
+                  <button
+                    onClick={() => setCartQty(it.id, it.qty - 1)}
+                    aria-label="Quitar uno"
+                    className="px-2.5 py-1 text-lg leading-none text-[var(--color-muted)] transition hover:text-[var(--color-brand)]"
+                  >
+                    −
+                  </button>
+                  <span className="w-6 text-center text-sm tabular-nums">
+                    {it.qty}
+                  </span>
+                  <button
+                    onClick={() => setCartQty(it.id, it.qty + 1)}
+                    disabled={it.qty >= it.stock}
+                    aria-label="Agregar uno"
+                    className="px-2.5 py-1 text-lg leading-none text-[var(--color-muted)] transition hover:text-[var(--color-brand)] disabled:opacity-30"
+                  >
+                    +
+                  </button>
+                </div>
+                <p className="text-right text-sm font-semibold">
+                  {formatMoney(it.subtotal)}
+                </p>
+              </div>
             </div>
-            <div className="flex items-center gap-1 rounded-lg border border-[var(--color-border)]">
-              <button
-                onClick={() => setCartQty(it.id, it.qty - 1)}
-                className="px-2.5 py-1 text-lg leading-none text-[var(--color-muted)] hover:text-[var(--color-brand)]"
-              >
-                −
-              </button>
-              <span className="w-6 text-center text-sm">{it.qty}</span>
-              <button
-                onClick={() => setCartQty(it.id, it.qty + 1)}
-                disabled={it.qty >= it.stock}
-                className="px-2.5 py-1 text-lg leading-none text-[var(--color-muted)] hover:text-[var(--color-brand)] disabled:opacity-30"
-              >
-                +
-              </button>
-            </div>
-            <div className="w-28 shrink-0 text-right">
-              <p className="text-sm font-semibold">{formatMoney(it.subtotal)}</p>
-              <p className="text-[11px] text-[var(--color-muted)]">
-                {it.qty} × {formatMoney(it.precio)}
-              </p>
-            </div>
-            <button
-              onClick={() => removeFromCart(it.id)}
-              className="shrink-0 rounded-md px-1.5 py-1 text-[var(--color-faint)] transition hover:bg-red-500/10 hover:text-red-400"
-              title="Quitar"
-            >
-              ✕
-            </button>
           </div>
         ))}
 
@@ -209,9 +236,21 @@ export default function Cart({ onSeguirComprando }) {
             <WhatsAppIcon className="h-5 w-5 transition group-hover:scale-110" />
             Enviar pedido por WhatsApp
           </button>
+          <button
+            onClick={copiarPedido}
+            className={
+              'w-full rounded-lg border px-4 py-2 text-sm font-medium transition ' +
+              (copiado
+                ? 'border-[var(--color-brand)] text-[var(--color-brand)]'
+                : 'border-[var(--color-border)] text-[var(--color-muted)] hover:border-[var(--color-brand)] hover:text-[var(--color-brand)]')
+            }
+          >
+            {copiado ? '¡Pedido copiado!' : '📋 Copiar pedido'}
+          </button>
           <p className="text-center text-xs text-[var(--color-faint)]">
-            Sin pago online. Coordinás el pago por transferencia al
-            confirmar.
+            Sin pago online. Coordinás el pago por transferencia al confirmar.
+            Si el pedido llega desordenado, usá <b>Copiar pedido</b> y pegalo
+            en el chat.
           </p>
         </div>
 

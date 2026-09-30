@@ -101,9 +101,6 @@ export default function ProductCard({ product }) {
             <p className="text-lg font-bold text-[var(--color-brand)]">
               {formatMoney(product.precio)}
             </p>
-            <p className="text-[11px] text-[var(--color-faint)]">
-              {product.stock} en stock
-            </p>
           </div>
           {inCart > 0 ? (
             <div className="flex items-center overflow-hidden rounded-lg bg-[var(--color-brand)] text-white shadow-sm">
