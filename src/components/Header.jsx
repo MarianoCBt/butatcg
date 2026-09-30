@@ -4,7 +4,7 @@ import { config } from '../config'
 import Dropdown, { DropdownItem } from './Dropdown'
 
 export default function Header({ view, setView, applyFilter, onInicio }) {
-  const { cartCount, expansiones, accesorioTipos, sets } = useStore()
+  const { cartCount, expansiones, accesorioTipos } = useStore()
   const [logoOk, setLogoOk] = useState(true)
   const [menuOpen, setMenuOpen] = useState(false)
 
@@ -51,10 +51,10 @@ export default function Header({ view, setView, applyFilter, onInicio }) {
             Inicio
           </button>
 
-          <Dropdown label="Preventa">
+          <Dropdown label="Expansiones">
             {expansiones.length === 0 && (
               <span className="block px-4 py-2 text-sm text-[var(--color-faint)]">
-                Sin preventas activas
+                Sin expansiones cargadas
               </span>
             )}
             {expansiones.map((exp) => (
@@ -71,26 +71,17 @@ export default function Header({ view, setView, applyFilter, onInicio }) {
               <DropdownItem
                 onClick={() => goCatalog({ categoria: 'todos', preventa: true })}
               >
-                Ver todas las preventas
+                Ver todas
               </DropdownItem>
             )}
           </Dropdown>
 
-          <Dropdown label="Sets anteriores">
-            {sets.length === 0 && (
-              <span className="block px-4 py-2 text-sm text-[var(--color-faint)]">
-                Sin sets cargados
-              </span>
-            )}
-            {sets.map((s) => (
-              <DropdownItem
-                key={s}
-                onClick={() => goCatalog({ categoria: 'todos', expansion: s })}
-              >
-                {s}
-              </DropdownItem>
-            ))}
-          </Dropdown>
+          <button
+            onClick={() => goCatalog({ categoria: 'sellado' })}
+            className={navCls(false)}
+          >
+            Sellado
+          </button>
 
           <Dropdown label="Accesorios">
             <DropdownItem onClick={() => goCatalog({ categoria: 'accesorio' })}>
@@ -151,9 +142,9 @@ export default function Header({ view, setView, applyFilter, onInicio }) {
             Inicio
           </button>
 
-          <p className={mobileLabel}>Preventa</p>
+          <p className={mobileLabel}>Expansiones</p>
           {expansiones.length === 0 && (
-            <span className={mobileEmpty}>Sin preventas activas</span>
+            <span className={mobileEmpty}>Sin expansiones cargadas</span>
           )}
           {expansiones.map((exp) => (
             <button
@@ -171,23 +162,16 @@ export default function Header({ view, setView, applyFilter, onInicio }) {
               onClick={() => goCatalog({ categoria: 'todos', preventa: true })}
               className={mobileSub}
             >
-              Ver todas las preventas
+              Ver todas
             </button>
           )}
 
-          <p className={mobileLabel}>Sets anteriores</p>
-          {sets.length === 0 && (
-            <span className={mobileEmpty}>Sin sets cargados</span>
-          )}
-          {sets.map((s) => (
-            <button
-              key={s}
-              onClick={() => goCatalog({ categoria: 'todos', expansion: s })}
-              className={mobileSub}
-            >
-              {s}
-            </button>
-          ))}
+          <button
+            onClick={() => goCatalog({ categoria: 'sellado' })}
+            className={mobileTop}
+          >
+            Sellado
+          </button>
 
           <p className={mobileLabel}>Accesorios</p>
           <button
