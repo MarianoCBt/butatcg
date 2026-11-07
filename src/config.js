@@ -37,7 +37,7 @@ export const config = {
     activo: true,
     imagen: 'https://i.imgur.com/oCcDpcn.png',
     alt: 'Nueva preventa',
-    expansion: 'Beyond the Brave',
+    expansion: 'Magnificent Maestros',
   },
 
   // -------------------------------------------------------------------
