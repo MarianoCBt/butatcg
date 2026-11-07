@@ -24,6 +24,16 @@ export function esOverframe(product) {
   return /extended art|overframe/i.test(product?.nombre || '')
 }
 
+// Cartas "especiales" (Overframe / Starlight Rare). Se listan al final del
+// catálogo, después del resto, sin importar el orden elegido.
+export function esEspecial(product) {
+  return (
+    esOverframe(product) ||
+    /starlight/i.test(product?.rareza || '') ||
+    /starlight/i.test(product?.nombre || '')
+  )
+}
+
 // Degradado de la etiqueta OVERFRAME (tokens definidos en index.css).
 export const estiloOverframe = {
   backgroundImage:

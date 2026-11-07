@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useStore } from '../store/StoreContext'
 import { CATEGORIES } from '../config'
+import { esEspecial } from '../utils/producto'
 import ProductCard from '../components/ProductCard'
 import Hero from '../components/Hero'
 import ConsultaCarta from '../components/ConsultaCarta'
@@ -49,10 +50,21 @@ export default function Catalog({ filter, setFilter }) {
       return dir === 'asc' ? cmp : -cmp
     }
 
-    if (orden === 'az') lista.sort(porNombre('asc'))
-    else if (orden === 'za') lista.sort(porNombre('desc'))
-    else if (orden === 'precio-asc') lista.sort(porPrecio('asc'))
-    else if (orden === 'precio-desc') lista.sort(porPrecio('desc'))
+    // Las especiales (Overframe / Starlight) van siempre al final, sin
+    // importar el orden elegido; dentro de cada grupo se aplica ese orden.
+    const especialesAlFinal = (cmp) => (a, b) => {
+      const ea = esEspecial(a) ? 1 : 0
+      const eb = esEspecial(b) ? 1 : 0
+      if (ea !== eb) return ea - eb
+      return cmp(a, b)
+    }
+
+    if (orden === 'az') lista.sort(especialesAlFinal(porNombre('asc')))
+    else if (orden === 'za') lista.sort(especialesAlFinal(porNombre('desc')))
+    else if (orden === 'precio-asc')
+      lista.sort(especialesAlFinal(porPrecio('asc')))
+    else if (orden === 'precio-desc')
+      lista.sort(especialesAlFinal(porPrecio('desc')))
 
     return lista
   }, [products, query, filter, soloStock, orden])
