@@ -96,14 +96,14 @@ export default function ProductCard({ product }) {
           )}
         </div>
 
-        <div className="mt-auto flex items-end justify-between pt-2">
-          <div>
-            <p className="text-lg font-bold text-[var(--color-brand)]">
-              {formatMoney(product.precio)}
-            </p>
-          </div>
+        {/* En cards angostas (2 columnas en celular) el precio y el botón no
+            entran en una línea, así que se apilan hasta el breakpoint sm. */}
+        <div className="mt-auto flex flex-col items-stretch gap-2 pt-2 sm:flex-row sm:items-end sm:justify-between">
+          <p className="text-base font-bold leading-tight text-[var(--color-brand)] sm:text-lg">
+            {formatMoney(product.precio)}
+          </p>
           {inCart > 0 ? (
-            <div className="flex items-center overflow-hidden rounded-lg bg-[var(--color-brand)] text-white shadow-sm">
+            <div className="flex w-full items-center justify-center overflow-hidden rounded-lg bg-[var(--color-brand)] text-white shadow-sm sm:w-auto">
               <button
                 onClick={() => setCartQty(product.id, inCart - 1)}
                 aria-label="Quitar uno"
@@ -127,7 +127,7 @@ export default function ProductCard({ product }) {
             <button
               onClick={() => addToCart(product.id)}
               disabled={agotado}
-              className="rounded-lg bg-[var(--color-brand)] px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-[var(--color-brand-dark)] disabled:cursor-not-allowed disabled:opacity-40"
+              className="w-full rounded-lg bg-[var(--color-brand)] px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-[var(--color-brand-dark)] disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
             >
               Agregar
             </button>
