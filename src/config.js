@@ -27,7 +27,9 @@ export const config = {
   // -------------------------------------------------------------------
   //  BANNER (imagen, arriba de todo). Cambiá la imagen cuando salga una
   //  preventa nueva. Poné activo: false para ocultarlo.
-  //  - imagen: URL de la imagen, o '/archivo.webp' si la subís a public/.
+  //  - imagen: URL externa, o un archivo de public/ con
+  //    import.meta.env.BASE_URL + 'archivo.webp' (el sitio vive en /butatcg/,
+  //    por eso NO sirve poner '/archivo.webp' a secas).
   //  - expansion: a qué set lleva al tocarlo. Tiene que coincidir EXACTO
   //    con la columna "expansion" de la planilla. Vacío ('') = última preventa.
   //  Alto del banner: 144px (celular) / 208px (tablet) / 256px (escritorio).
@@ -35,8 +37,8 @@ export const config = {
   // -------------------------------------------------------------------
   banner: {
     activo: true,
-    imagen: 'https://i.imgur.com/oCcDpcn.png',
-    alt: 'Nueva preventa',
+    imagen: import.meta.env.BASE_URL + 'banner-magnificent-maestros.webp',
+    alt: 'Preventa Magnificent Maestros',
     expansion: 'Magnificent Maestros',
   },
 
